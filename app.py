@@ -294,43 +294,31 @@ st.markdown(f"""
 # ============================================================
 tab_inc, tab_exp, tab_bal = st.tabs(["💵 Thu nhập", "🛒 Chi phí", "💰 Tiết kiệm"])
 
+def parse_money(text):
+    """Parse '35.000.000' or '35000000' -> 35000000"""
+    clean = text.replace(".", "").replace(",", "").strip()
+    if not clean:
+        return 0
+    try:
+        return int(clean)
+    except ValueError:
+        return 0
+
+
+def fmt_input(v):
+    """Format 35000000 -> '35.000.000'"""
+    if v == 0:
+        return ""
+    return f"{v:,}".replace(",", ".")
+
+
 # ============================================================
 #  TAB 1 — THU NHẬP
 # ============================================================
 with tab_inc:
     st.subheader("💵 Thu nhập")
 
-    # Summary cards
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(f"""<div class="summary-card card-green">
-            <div class="label">Tổng thu nhập</div>
-            <div class="value">{fmt(total_inc)}</div>
-            <div class="sub">{fmt_delta(delta_inc)} so tháng trước</div>
-        </div>""", unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""<div class="summary-card card-gray">
-            <div class="label">Chi tiêu</div>
-            <div class="value">{fmt(total_exp)}</div>
-        </div>""", unsafe_allow_html=True)
-    with c3:
-        st.markdown(f"""<div class="summary-card {'card-green' if balance >= 0 else 'card-red'}">
-            <div class="label">Tiết kiệm</div>
-            <div class="value">{fmt(balance)}</div>
-            <div class="sub">{fmt_delta(delta_bal)} so tháng trước</div>
-        </div>""", unsafe_allow_html=True)
-
-    st.divider()
-
-    # Nút lưu nổi bật
-    save_col1, save_col2, save_col3 = st.columns([1, 2, 1])
-    with save_col2:
-        if st.button("💾 Lưu tất cả thay đổi", type="primary", use_container_width=True,
-                     key="save_income"):
-            save(data)
-            st.toast("Đã lưu!")
-
-    # 2 cột: trái = nhập liệu, phải = biểu đồ
+    # 2 cột: trái = nhập liệu, phải = biểu đồ + tổng
     col_input, col_chart = st.columns([3, 2])
 
     with col_input:
@@ -347,13 +335,15 @@ with tab_inc:
                     data["members"][i] = new_name
             with c_val:
                 current_member = new_name if new_name else member
-                val = st.number_input(
+                current_val = md["income"].get(current_member, 0)
+                raw = st.text_input(
                     f"💵 {current_member}",
-                    value=int(md["income"].get(current_member, 0)),
-                    min_value=0, step=100000, format="%d",
+                    value=fmt_input(current_val),
                     key=f"inc_{member}_{selected}",
-                    label_visibility="collapsed")
-                md["income"][current_member] = val
+                    label_visibility="collapsed",
+                    placeholder="0")
+                parsed = parse_money(raw)
+                md["income"][current_member] = parsed
 
         # --- Thu nhập phát sinh ---
         st.divider()
@@ -362,11 +352,11 @@ with tab_inc:
 
         with st.form("add_extra", clear_on_submit=True):
             ex_name = st.text_input("Nguồn", placeholder="Thưởng, lãi, bán hàng...")
-            ex_amt = st.number_input("Số tiền (VNĐ)", min_value=0, step=100000, format="%d")
+            ex_raw = st.text_input("Số tiền (VNĐ)", placeholder="0")
             if st.form_submit_button("➕ Thêm", use_container_width=True, type="primary"):
+                ex_amt = parse_money(ex_raw)
                 if ex_name and ex_amt > 0:
                     md.setdefault("extra_income", {})[ex_name] = ex_amt
-                    save(data)
                     st.rerun()
 
         if extra:
@@ -376,13 +366,40 @@ with tab_inc:
                 c2.write(f"**{fmt(amt)}**")
                 if c3.button("🗑️", key=f"del_ex_{name}_{selected}"):
                     del md["extra_income"][name]
-                    save(data)
                     st.rerun()
         else:
             st.caption("Chưa có thu nhập phát sinh")
 
-    # --- Biểu đồ bên phải ---
+        st.divider()
+        # Nút lưu
+        if st.button("💾 Lưu lên cloud", type="primary", use_container_width=True,
+                     key="save_income"):
+            save(data)
+            st.toast("Đã lưu!")
+
+    # --- Biểu đồ + Tổng bên phải ---
     with col_chart:
+        # Tính lại tổng realtime
+        now_inc = sum(md["income"].values()) + sum(md.get("extra_income", {}).values())
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown(f"""<div class="summary-card card-green">
+                <div class="label">Thu nhập</div>
+                <div class="value">{fmt(now_inc)}</div>
+            </div>""", unsafe_allow_html=True)
+        with c2:
+            st.markdown(f"""<div class="summary-card card-gray">
+                <div class="label">Chi tiêu</div>
+                <div class="value">{fmt(total_exp)}</div>
+            </div>""", unsafe_allow_html=True)
+        with c3:
+            now_bal = now_inc - total_exp
+            st.markdown(f"""<div class="summary-card {'card-green' if now_bal >= 0 else 'card-red'}">
+                <div class="label">Tiết kiệm</div>
+                <div class="value">{fmt(now_bal)}</div>
+            </div>""", unsafe_allow_html=True)
+
         inc_data = {k: v for k, v in md["income"].items() if v > 0}
         extra_data = {k: v for k, v in md.get("extra_income", {}).items() if v > 0}
         all_inc = {**inc_data, **extra_data}
