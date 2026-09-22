@@ -20,22 +20,23 @@ st.markdown("""
         .stMetric label { font-size: 11px !important; }
         .stMetric [data-testid="stMetricValue"] { font-size: 15px !important; }
         .stNumberInput > div > div > input { font-size: 14px !important; }
+        .stColumns > div { padding: 0 2px !important; }
     }
     div[data-testid="stDataFrame"] { overflow-x: auto; }
     .summary-card {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        border-radius: 12px; padding: 16px; text-align: center;
-        border: 1px solid rgba(0,0,0,0.05);
+        border-radius: 12px; padding: 14px 16px; text-align: center;
+        border: 1px solid rgba(0,0,0,0.06);
     }
-    .summary-card .label { font-size: 13px; color: #666; margin-bottom: 4px; }
-    .summary-card .value { font-size: 22px; font-weight: 700; color: #1a1a2e; }
-    .green { border-left: 4px solid #38ef7d; }
-    .red { border-left: 4px solid #f45c43; }
-    .purple { border-left: 4px solid #667eea; }
-    .category-row {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 8px 0; border-bottom: 1px solid #f0f0f0;
-    }
+    .card-green { background: linear-gradient(135deg, #e8f5e9, #c8e6c9); border-left: 4px solid #38ef7d; }
+    .card-red { background: linear-gradient(135deg, #fce4ec, #f8bbd0); border-left: 4px solid #f45c43; }
+    .card-purple { background: linear-gradient(135deg, #ede7f6, #d1c4e9); border-left: 4px solid #667eea; }
+    .card-gray { background: linear-gradient(135deg, #f5f7fa, #c3cfe2); border-left: 4px solid #90a4ae; }
+    .summary-card .label { font-size: 11px; color: #666; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .summary-card .value { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+    .summary-card .sub { font-size: 11px; color: #888; margin-top: 2px; }
+    .delta-up { color: #38ef7d !important; }
+    .delta-down { color: #f45c43 !important; }
+    .section-divider { margin: 16px 0 8px 0; padding-bottom: 4px; border-bottom: 1px solid #e0e0e0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -64,6 +65,11 @@ def fmt_short(v):
     return str(v)
 
 
+def fmt_delta(v):
+    sign = "+" if v >= 0 else ""
+    return f"{sign}{fmt_short(v)}"
+
+
 def month_key(dt):
     return dt.strftime("%Y-%m")
 
@@ -82,19 +88,40 @@ def month_short(mk):
         return mk
 
 
-def new_month():
+def prev_month_key(mk):
+    dt = datetime.strptime(mk, "%Y-%m")
+    if dt.month == 1:
+        return f"{dt.year - 1}-12"
+    return f"{dt.year}-{dt.month - 1:02d}"
+
+
+def new_month(copy_from=None):
+    if copy_from:
+        return json.loads(json.dumps(copy_from))
     return {
         "income": {m: 0 for m in DEFAULT_DATA["members"]},
         "extra_income": {},
-        "expenses": {c: 0 for c in DEFAULT_DATA["categories"]}
+        "expenses": {c: 0 for c in DEFAULT_DATA["categories"]},
+        "notes": ""
     }
+
+
+def calc_month_total(m):
+    inc = sum(m["income"].values()) + sum(m.get("extra_income", {}).values())
+    exp = sum(m["expenses"].values())
+    return inc, exp, inc - exp
 
 
 def load_data():
     path = "family_data.json"
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            d = json.load(f)
+        # migrate: add notes field to months that don't have it
+        for mk in d.get("months", {}):
+            d["months"][mk].setdefault("notes", "")
+            d["months"][mk].setdefault("extra_income", {})
+        return d
     data = dict(DEFAULT_DATA)
     data["months"][month_key(date.today())] = new_month()
     return data
@@ -137,44 +164,56 @@ with st.sidebar:
 
     st.divider()
 
-    # Chọn / thêm tháng
-    st.markdown("#### 📅 Tháng")
+    # Chọn tháng
+    st.markdown("#### 📅 Chọn tháng")
     all_months = sorted(data["months"].keys(), reverse=True)
-    selected = st.selectbox("Chọn tháng", all_months,
-                            format_func=month_label, label_visibility="collapsed")
+    selected = st.selectbox("Tháng", all_months,
+                            format_func=month_label, label_visibility="collapsed",
+                            key="month_select")
 
+    # Thêm tháng
     with st.expander("➕ Thêm tháng mới"):
-        new_y = st.number_input("Năm", value=date.today().year, min_value=2020, max_value=2030, step=1, key="new_y")
-        new_m = st.number_input("Tháng", value=date.today().month, min_value=1, max_value=12, step=1, key="new_m")
+        new_y = st.number_input("Năm", value=date.today().year,
+                                min_value=2020, max_value=2030, step=1, key="new_y")
+        new_m = st.number_input("Tháng", value=date.today().month,
+                                min_value=1, max_value=12, step=1, key="new_m")
         mk_new = f"{new_y}-{new_m:02d}"
+        copy_prev = st.checkbox("Copy dữ liệu tháng trước", value=True, key="copy_prev")
         if st.button("Tạo tháng", use_container_width=True, type="primary"):
             if mk_new not in data["months"]:
-                data["months"][mk_new] = new_month()
+                if copy_prev and all_months:
+                    prev = prev_month_key(mk_new)
+                    if prev in data["months"]:
+                        data["months"][mk_new] = new_month(copy_from=data["months"][prev])
+                    else:
+                        data["months"][mk_new] = new_month()
+                else:
+                    data["months"][mk_new] = new_month()
                 save(data)
                 st.success(f"Đã tạo {month_label(mk_new)}")
                 st.rerun()
             else:
                 st.warning("Tháng đã tồn tại!")
 
+    # Xóa tháng
     if len(all_months) > 1:
-        del_month = st.selectbox("Xóa tháng", all_months,
-                                 format_func=month_label, key="del_month_sel")
-        if st.button("🗑️ Xóa tháng này", type="secondary"):
-            if f"confirm_del_{del_month}" not in st.session_state:
-                st.session_state[f"confirm_del_{del_month}"] = True
-            else:
-                del data["months"][del_month]
-                save(data)
-                del st.session_state[f"confirm_del_{del_month}"]
-                st.rerun()
-
-        if st.session_state.get(f"confirm_del_{del_month}"):
-            st.warning(f"Xóa {month_label(del_month)}? Nhấn lại để xác nhận.")
-            if st.button("Xác nhận xóa", type="primary"):
-                del data["months"][del_month]
-                save(data)
-                del st.session_state[f"confirm_del_{del_month}"]
-                st.rerun()
+        with st.expander("🗑️ Xóa tháng"):
+            del_sel = st.selectbox("Chọn tháng xóa", all_months,
+                                   format_func=month_label, key="del_month_sel")
+            del_key = f"confirm_del_{del_sel}"
+            if st.button("Xóa", key="del_btn"):
+                st.session_state[del_key] = True
+            if st.session_state.get(del_key):
+                st.warning(f"Xác nhận xóa {month_label(del_sel)}?")
+                c1, c2 = st.columns(2)
+                if c1.button("✅ Có, xóa", type="primary", key="yes_del"):
+                    del data["months"][del_sel]
+                    save(data)
+                    del st.session_state[del_key]
+                    st.rerun()
+                if c2.button("❌ Hủy", key="no_del"):
+                    del st.session_state[del_key]
+                    st.rerun()
 
     st.divider()
     st.caption("Hũ Chi Tiêu v1.0")
@@ -182,20 +221,33 @@ with st.sidebar:
 # ============================================================
 #  HEADER
 # ============================================================
-st.markdown("""
+md = data["months"].setdefault(selected, new_month())
+total_inc, total_exp, balance = calc_month_total(md)
+
+# So sánh với tháng trước
+prev_mk = prev_month_key(selected)
+prev_data = data["months"].get(prev_mk)
+prev_inc, prev_exp, prev_bal = (0, 0, 0)
+if prev_data:
+    prev_inc, prev_exp, prev_bal = calc_month_total(prev_data)
+
+delta_inc = total_inc - prev_inc
+delta_exp = total_exp - prev_exp
+delta_bal = balance - prev_bal
+
+st.markdown(f"""
 <style>
-    .hdr {
+    .hdr {{
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white; padding: 16px 24px; border-radius: 12px; margin-bottom: 16px;
-        display: flex; align-items: center; gap: 12px;
-    }
-    .hdr h1 { color: white; margin: 0; font-size: 20px; font-weight: 600; }
-    .hdr .sub { color: rgba(255,255,255,0.8); font-size: 13px; }
+        color: white; padding: 16px 20px; border-radius: 12px; margin-bottom: 12px;
+    }}
+    .hdr h1 {{ color: white; margin: 0; font-size: 20px; font-weight: 600; }}
+    .hdr .sub {{ color: rgba(255,255,255,0.75); font-size: 13px; margin-top: 2px; }}
 </style>
 <div class="hdr">
     <div>
         <h1>💰 HŨ CHI TIÊU GIA ĐÌNH</h1>
-        <div class="sub"> """ + month_label(selected) + """</div>
+        <div class="sub">{month_label(selected)} • Dư: {fmt(balance)}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -205,25 +257,42 @@ st.markdown("""
 # ============================================================
 tab_inc, tab_exp, tab_bal = st.tabs(["💵 Thu nhập", "🛒 Chi phí", "💰 Tiết kiệm"])
 
-md = data["months"].setdefault(selected, new_month())
-total_inc = sum(md["income"].values()) + sum(md.get("extra_income", {}).values())
-total_exp = sum(md["expenses"].values())
-balance = total_inc - total_exp
-
 # ============================================================
 #  TAB 1 — THU NHẬP
 # ============================================================
 with tab_inc:
     st.subheader("💵 Thu nhập")
 
-    # Thu nhập chính — mỗi người 1 hàng
+    # Summary cards
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f"""<div class="summary-card card-green">
+            <div class="label">Tổng thu nhập</div>
+            <div class="value">{fmt(total_inc)}</div>
+            <div class="sub">{fmt_delta(delta_inc)} so với tháng trước</div>
+        </div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""<div class="summary-card card-gray">
+            <div class="label">Chi tiêu</div>
+            <div class="value">{fmt(total_exp)}</div>
+        </div>""", unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"""<div class="summary-card {'card-green' if balance >= 0 else 'card-red'}">
+            <div class="label">Tiết kiệm</div>
+            <div class="value">{fmt(balance)}</div>
+            <div class="sub">{fmt_delta(delta_bal)} so với tháng trước</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.divider()
+
+    # Thu nhập chính
+    st.markdown("**Thu nhập cố định**")
     for member in data["members"]:
         val = st.number_input(
             f"💼 {member}",
             value=int(md["income"].get(member, 0)),
             min_value=0, step=100000, format="%d",
-            key=f"inc_{member}_{selected}",
-            help="Thu nhập cố định hàng tháng")
+            key=f"inc_{member}_{selected}")
         if val != md["income"].get(member, 0):
             md["income"][member] = val
             save(data)
@@ -231,15 +300,15 @@ with tab_inc:
     st.divider()
 
     # Thu nhập phát sinh
-    st.markdown("#### 📌 Thu nhập phát sinh")
+    st.markdown("**Thu nhập phát sinh**")
     extra = md.get("extra_income", {})
 
     with st.form("add_extra", clear_on_submit=True):
         c1, c2 = st.columns([3, 2])
         with c1:
-            ex_name = st.text_input("Nguồn", placeholder="VD: Thưởng, bán hàng...")
+            ex_name = st.text_input("Nguồn", placeholder="Thưởng, lãi, bán hàng...")
         with c2:
-            ex_amt = st.number_input("Số tiền (VNĐ)", min_value=0, step=100000, format="%d")
+            ex_amt = st.number_input("Số tiền", min_value=0, step=100000, format="%d")
         if st.form_submit_button("➕ Thêm", use_container_width=True, type="primary"):
             if ex_name and ex_amt > 0:
                 md.setdefault("extra_income", {})[ex_name] = ex_amt
@@ -248,7 +317,7 @@ with tab_inc:
 
     if extra:
         for name, amt in extra.items():
-            c1, c2, c3 = st.columns([4, 3, 1])
+            c1, c2, c3 = st.columns([5, 3, 1])
             c1.write(f"📌 {name}")
             c2.write(f"**{fmt(amt)}**")
             if c3.button("🗑️", key=f"del_ex_{name}_{selected}"):
@@ -257,16 +326,6 @@ with tab_inc:
                 st.rerun()
     else:
         st.caption("Chưa có thu nhập phát sinh")
-
-    st.divider()
-
-    # Tổng kết
-    st.markdown(f"""
-    <div class="summary-card green">
-        <div class="label">TỔNG THU NHẬP</div>
-        <div class="value">{fmt(total_inc)}</div>
-    </div>
-    """, unsafe_allow_html=True)
 
     # Biểu đồ
     inc_data = {k: v for k, v in md["income"].items() if v > 0}
@@ -282,7 +341,6 @@ with tab_inc:
             ax.text(bar.get_x() + bar.get_width() / 2., bar.get_height(),
                     fmt_short(val), ha="center", va="bottom", fontsize=9, fontweight="bold")
         ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-        ax.set_ylabel("VNĐ")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.grid(axis="y", alpha=0.3)
@@ -296,7 +354,31 @@ with tab_inc:
 with tab_exp:
     st.subheader("🛒 Chi tiêu")
 
+    # Summary cards
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f"""<div class="summary-card card-red">
+            <div class="label">Tổng chi tiêu</div>
+            <div class="value">{fmt(total_exp)}</div>
+            <div class="sub">{fmt_delta(delta_exp)} so với tháng trước</div>
+        </div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""<div class="summary-card card-green">
+            <div class="label">Thu nhập</div>
+            <div class="value">{fmt(total_inc)}</div>
+        </div>""", unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"""<div class="summary-card {'card-green' if balance >= 0 else 'card-red'}">
+            <div class="label">Còn lại</div>
+            <div class="value">{fmt(balance)}</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.divider()
+
     for cat in data["categories"]:
+        prev_val = 0
+        if prev_data:
+            prev_val = prev_data["expenses"].get(cat, 0)
         val = st.number_input(
             cat,
             value=int(md["expenses"].get(cat, 0)),
@@ -306,38 +388,13 @@ with tab_exp:
             md["expenses"][cat] = val
             save(data)
 
-    st.divider()
-
-    # Tổng kết
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(f"""
-        <div class="summary-card red">
-            <div class="label">TỔNG CHI TIÊU</div>
-            <div class="value">{fmt(total_exp)}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-        <div class="summary-card green">
-            <div class="label">THU NHẬP</div>
-            <div class="value">{fmt(total_inc)}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with c3:
-        cls = "green" if balance >= 0 else "red"
-        st.markdown(f"""
-        <div class="summary-card {cls}">
-            <div class="label">CÒN LẠI</div>
-            <div class="value">{fmt(balance)}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
     # Biểu đồ chi tiêu
     exp_data = {k: v for k, v in md["expenses"].items() if v > 0}
     if exp_data:
         st.divider()
         sorted_exp = dict(sorted(exp_data.items(), key=lambda x: x[1], reverse=True))
+
+        # Bar chart
         fig, ax = plt.subplots(figsize=(7, 4), dpi=150)
         colors = ["#f45c43", "#f093fb", "#667eea", "#4facfe", "#43e97b", "#fa709a"]
         bars = ax.barh(list(sorted_exp.keys()), list(sorted_exp.values()),
@@ -349,7 +406,6 @@ with tab_exp:
                     bar.get_y() + bar.get_height() / 2.,
                     f"{fmt(val)} ({pct:.0f}%)", ha="left", va="center", fontsize=9, fontweight="bold")
         ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-        ax.set_xlabel("VNĐ")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.grid(axis="x", alpha=0.3)
@@ -357,13 +413,12 @@ with tab_exp:
         st.pyplot(fig)
         plt.close(fig)
 
-        # Pie chart
+        # Pie chart donut
         fig2, ax2 = plt.subplots(figsize=(5, 5), dpi=150)
-        colors2 = ["#f45c43", "#f093fb", "#667eea", "#4facfe", "#43e97b", "#fa709a"]
         wedges, texts, autotexts = ax2.pie(
             sorted_exp.values(), labels=None,
             autopct=lambda p: f"{p:.1f}%" if p > 4 else "",
-            colors=colors2[:len(sorted_exp)], startangle=90,
+            colors=colors[:len(sorted_exp)], startangle=90,
             pctdistance=0.8, wedgeprops=dict(width=0.5, edgecolor="white"))
         for t in autotexts:
             t.set_fontsize(9)
@@ -381,50 +436,58 @@ with tab_bal:
     st.subheader("💰 Tiết kiệm")
 
     # Summary cards
+    rate = (balance / total_inc * 100) if total_inc > 0 else 0
+    prev_rate = (prev_bal / prev_inc * 100) if prev_inc > 0 else 0
+    rate_delta = rate - prev_rate
+
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown(f"""
-        <div class="summary-card green">
-            <div class="label">THU NHẬP</div>
+        st.markdown(f"""<div class="summary-card card-green">
+            <div class="label">Thu nhập</div>
             <div class="value">{fmt(total_inc)}</div>
-        </div>
-        """, unsafe_allow_html=True)
+            <div class="sub">{fmt_delta(delta_inc)}</div>
+        </div>""", unsafe_allow_html=True)
     with c2:
-        st.markdown(f"""
-        <div class="summary-card red">
-            <div class="label">CHI TIÊU</div>
+        st.markdown(f"""<div class="summary-card card-red">
+            <div class="label">Chi tiêu</div>
             <div class="value">{fmt(total_exp)}</div>
-        </div>
-        """, unsafe_allow_html=True)
+            <div class="sub">{fmt_delta(delta_exp)}</div>
+        </div>""", unsafe_allow_html=True)
     with c3:
-        rate = (balance / total_inc * 100) if total_inc > 0 else 0
-        cls = "green" if balance >= 0 else "red"
-        st.markdown(f"""
-        <div class="summary-card purple">
-            <div class="label">TIẾT KIỆM ({rate:.1f}%)</div>
+        st.markdown(f"""<div class="summary-card card-purple">
+            <div class="label">Tiết kiệm ({rate:.1f}%)</div>
             <div class="value">{fmt(balance)}</div>
-        </div>
-        """, unsafe_allow_html=True)
+            <div class="sub">{fmt_delta(delta_bal)}</div>
+        </div>""", unsafe_allow_html=True)
 
+    # Ghi chú
+    with st.expander("📝 Ghi chú tháng này", expanded=False):
+        notes = st.text_area("Ghi chú", value=md.get("notes", ""),
+                             key=f"notes_{selected}", height=80,
+                             placeholder="Ghi chú chi tiêu tháng này...")
+        if notes != md.get("notes", ""):
+            md["notes"] = notes
+            save(data)
+
+    # Dữ liệu các tháng
     sorted_months = sorted(data["months"].keys())
     labels = [month_short(m) for m in sorted_months]
-
     inc_list, exp_list, bal_list = [], [], []
     for mk in sorted_months:
         m = data["months"][mk]
-        inc = sum(m["income"].values()) + sum(m.get("extra_income", {}).values())
-        exp = sum(m["expenses"].values())
+        inc, exp, bal = calc_month_total(m)
         inc_list.append(inc)
         exp_list.append(exp)
-        bal_list.append(inc - exp)
+        bal_list.append(bal)
 
     # Biểu đồ xu hướng
     st.divider()
     if len(sorted_months) >= 2:
-        st.markdown("#### 📈 Xu hướng qua các tháng")
+        st.markdown("#### 📈 Xu hướng")
+
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5), dpi=150)
 
-        # Bar chart
+        # Grouped bar
         x = range(len(labels))
         w = 0.25
         ax1.bar([i - w for i in x], inc_list, width=w, label="Thu nhập", color="#38ef7d", alpha=0.85)
@@ -439,8 +502,8 @@ with tab_bal:
         ax1.spines["right"].set_visible(False)
         ax1.grid(axis="y", alpha=0.3)
 
-        # Line chart xu hướng
-        ax2.plot(labels, bal_list, marker="o", color="#667eea", linewidth=2.5, markersize=6, label="Tiết kiệm")
+        # Savings line
+        ax2.plot(labels, bal_list, marker="o", color="#667eea", linewidth=2.5, markersize=6)
         ax2.fill_between(labels, bal_list, alpha=0.15, color="#667eea")
         for i, v in enumerate(bal_list):
             ax2.annotate(fmt_short(v), (labels[i], v), textcoords="offset points",
@@ -456,36 +519,69 @@ with tab_bal:
         fig.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
+
+        # Chi tiêu theo nhóm qua tháng
+        st.markdown("#### 📊 Chi tiêu theo nhóm")
+        cat_data = {c: [] for c in data["categories"]}
+        for mk in sorted_months:
+            m = data["months"][mk]
+            for c in data["categories"]:
+                cat_data[c].append(m["expenses"].get(c, 0))
+        active_cats = [c for c in data["categories"] if any(v > 0 for v in cat_data[c])]
+        if active_cats:
+            fig, ax = plt.subplots(figsize=(10, 4.5), dpi=150)
+            x = range(len(labels))
+            colors = ["#667eea", "#764ba2", "#f093fb", "#f5576c", "#4facfe", "#00f2fe", "#43e97b", "#fa709a"]
+            bottom = [0] * len(labels)
+            for i, cat in enumerate(active_cats):
+                vals = cat_data[cat]
+                ax.bar(x, vals, bottom=bottom, label=cat, color=colors[i % len(colors)], alpha=0.85)
+                bottom = [b + v for b, v in zip(bottom, vals)]
+            ax.set_xticks(list(x))
+            ax.set_xticklabels(labels, rotation=45, fontsize=9)
+            ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
+            ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1, 1))
+            ax.set_title("Chi tiêu tích lũy theo nhóm", fontsize=12, fontweight="bold")
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            fig.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
     else:
-        fig, ax = plt.subplots(figsize=(5, 3.5), dpi=150)
         if total_inc > 0:
-            sizes = [total_exp, balance] if balance > 0 else [total_exp]
+            fig, ax = plt.subplots(figsize=(5, 3.5), dpi=150)
+            sizes = [total_exp, max(balance, 0)] if balance > 0 else [total_exp]
             labels_pie = ["Chi tiêu", "Tiết kiệm"] if balance > 0 else ["Chi tiêu"]
             colors_pie = ["#f45c43", "#38ef7d"] if balance > 0 else ["#f45c43"]
             ax.pie(sizes, labels=labels_pie, colors=colors_pie,
                    autopct=lambda p: fmt_short(p / 100 * total_inc),
                    startangle=90, textprops={"fontsize": 10, "fontweight": "bold"})
             ax.set_title("Chi tiêu vs Tiết kiệm", fontsize=12, fontweight="bold")
-        fig.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
+            fig.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
 
     # Bảng lịch sử số dư
     st.divider()
-    st.markdown("#### 📋 Lịch sử số dư các tháng")
+    st.markdown("#### 📋 Lịch sử số dư")
     rows = []
-    cum_balance = 0
-    for mk in sorted_months:
+    cum = 0
+    for i, mk in enumerate(sorted_months):
         m = data["months"][mk]
-        inc = sum(m["income"].values()) + sum(m.get("extra_income", {}).values())
-        exp = sum(m["expenses"].values())
-        bal = inc - exp
-        cum_balance += bal
+        inc, exp, bal = calc_month_total(m)
+        cum += bal
+        prev_b = bal_list[i - 1] if i > 0 else 0
+        chg = bal - prev_b if i > 0 else 0
+        notes_txt = m.get("notes", "")
+        if notes_txt and len(notes_txt) > 30:
+            notes_txt = notes_txt[:30] + "..."
         rows.append({
             "Tháng": month_short(mk),
             "Thu nhập": fmt(inc),
             "Chi tiêu": fmt(exp),
-            "Dư tháng": fmt(bal),
-            "Lũy kế": fmt(cum_balance)
+            "Dư": fmt(bal),
+            "Thay đổi": fmt(chg) if i > 0 else "--",
+            "Lũy kế": fmt(cum),
+            "Ghi chú": notes_txt
         })
     st.dataframe(rows, use_container_width=True, hide_index=True)
