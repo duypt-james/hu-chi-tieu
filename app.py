@@ -114,6 +114,24 @@ def get_gist_config():
     return token, gist_id
 
 
+def _ensure_valid(data):
+    """Đảm bảo data luôn có cấu trúc hợp lệ"""
+    if not isinstance(data, dict):
+        data = {}
+    if "months" not in data or not isinstance(data.get("months"), dict):
+        data["months"] = {}
+    if "members" not in data or not isinstance(data.get("members"), list):
+        data["members"] = list(DEFAULT_DATA["members"])
+    if "categories" not in data or not isinstance(data.get("categories"), list):
+        data["categories"] = list(DEFAULT_DATA["categories"])
+    for mk in data["months"]:
+        data["months"][mk].setdefault("notes", "")
+        data["months"][mk].setdefault("extra_income", {})
+        data["months"][mk].setdefault("income", {})
+        data["months"][mk].setdefault("expenses", {})
+    return data
+
+
 def load_data():
     token, gist_id = get_gist_config()
 
@@ -127,31 +145,34 @@ def load_data():
                 if GIST_FILENAME in gist.get("files", {}):
                     content = gist["files"][GIST_FILENAME]["content"]
                     d = json.loads(content)
-                    for mk in d.get("months", {}):
-                        d["months"][mk].setdefault("notes", "")
-                        d["months"][mk].setdefault("extra_income", {})
-                    return d
+                    if d:  # Gist có data
+                        return _ensure_valid(d)
+            else:
+                st.warning(f"Gist API lỗi {resp.status_code}")
         except Exception as e:
             st.warning(f"Không đọc được Gist: {e}")
 
     # Fallback: local file
     path = "family_data.json"
     if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            d = json.load(f)
-        for mk in d.get("months", {}):
-            d["months"][mk].setdefault("notes", "")
-            d["months"][mk].setdefault("extra_income", {})
-        return d
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if d:
+                return _ensure_valid(d)
+        except Exception:
+            pass
 
+    # Mặc định: tạo data mới với tháng hiện tại
     data = dict(DEFAULT_DATA)
-    data["months"][datetime.today().strftime("%Y-%m")] = new_month()
+    data["months"] = {datetime.today().strftime("%Y-%m"): new_month()}
     return data
 
 
-def save(data):
+def save(data, show_status=False):
     token, gist_id = get_gist_config()
     content = json.dumps(data, ensure_ascii=False, indent=2)
+    saved_to = None
 
     # Save to Gist
     if token and gist_id:
@@ -161,13 +182,29 @@ def save(data):
             resp = requests.patch(f"https://api.github.com/gists/{gist_id}",
                                   headers=headers, json=payload, timeout=10)
             if resp.status_code == 200:
-                return
+                saved_to = "cloud"
+                if show_status:
+                    st.success("Đã lưu lên GitHub Gist!")
+                return True
+            else:
+                if show_status:
+                    st.error(f"Gist API lỗi {resp.status_code}: {resp.text[:200]}")
         except Exception as e:
-            st.warning(f"Lưu Gist thất bại: {e}")
+            if show_status:
+                st.error(f"Lỗi kết nối Gist: {e}")
 
     # Fallback: local file
-    with open("family_data.json", "w", encoding="utf-8") as f:
-        f.write(content)
+    try:
+        with open("family_data.json", "w", encoding="utf-8") as f:
+            f.write(content)
+        saved_to = "local"
+        if show_status:
+            st.warning("Gist thất bại → Đã lưu vào file local")
+        return True
+    except Exception as e:
+        if show_status:
+            st.error(f"Lỗi lưu local: {e}")
+        return False
 
 
 if "data" not in st.session_state:
@@ -399,8 +436,7 @@ with tab_inc:
         # Nút lưu
         if st.button("💾 Lưu lên cloud", type="primary", use_container_width=True,
                      key="save_income"):
-            save(data)
-            st.toast("Đã lưu!")
+            save(data, show_status=True)
 
     # --- Biểu đồ bên phải ---
     with col_chart:
@@ -495,8 +531,7 @@ with tab_exp:
 
         if st.button("💾 Lưu lên cloud", type="primary", use_container_width=True,
                      key="save_expense"):
-            save(data)
-            st.toast("Đã lưu!")
+            save(data, show_status=True)
 
     with col_chart:
         exp_data = {k: v for k, v in md["expenses"].items() if v > 0}
