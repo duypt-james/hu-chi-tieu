@@ -300,6 +300,7 @@ tab_inc, tab_exp, tab_bal = st.tabs(["💵 Thu nhập", "🛒 Chi phí", "💰 T
 with tab_inc:
     st.subheader("💵 Thu nhập")
 
+    # Summary cards
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown(f"""<div class="summary-card card-green">
@@ -321,64 +322,88 @@ with tab_inc:
 
     st.divider()
 
-    st.markdown("**Thu nhập cố định**")
-    for member in data["members"]:
-        val = st.number_input(
-            f"💼 {member}",
-            value=int(md["income"].get(member, 0)),
-            min_value=0, step=100000, format="%d",
-            key=f"inc_{member}_{selected}")
-        if val != md["income"].get(member, 0):
-            md["income"][member] = val
+    # Nút lưu nổi bật
+    save_col1, save_col2, save_col3 = st.columns([1, 2, 1])
+    with save_col2:
+        if st.button("💾 Lưu tất cả thay đổi", type="primary", use_container_width=True,
+                     key="save_income"):
             save(data)
+            st.toast("Đã lưu!")
 
-    st.divider()
-    st.markdown("**Thu nhập phát sinh**")
-    extra = md.get("extra_income", {})
+    # 2 cột: trái = nhập liệu, phải = biểu đồ
+    col_input, col_chart = st.columns([3, 2])
 
-    with st.form("add_extra", clear_on_submit=True):
-        c1, c2 = st.columns([3, 2])
-        with c1:
-            ex_name = st.text_input("Nguồn", placeholder="Thưởng, lãi, bán hàng...")
-        with c2:
-            ex_amt = st.number_input("Số tiền", min_value=0, step=100000, format="%d")
-        if st.form_submit_button("➕ Thêm", use_container_width=True, type="primary"):
-            if ex_name and ex_amt > 0:
-                md.setdefault("extra_income", {})[ex_name] = ex_amt
-                save(data)
-                st.rerun()
+    with col_input:
+        # --- Thu nhập cố định ---
+        st.markdown("**Thu nhập cố định**")
+        for i, member in enumerate(data["members"]):
+            c_name, c_val = st.columns([2, 3])
+            with c_name:
+                new_name = st.text_input("Tên", value=member, key=f"member_name_{i}_{selected}",
+                                         label_visibility="collapsed", placeholder="Tên")
+                if new_name and new_name != member:
+                    old_val = md["income"].pop(member, 0)
+                    md["income"][new_name] = old_val
+                    data["members"][i] = new_name
+            with c_val:
+                current_member = new_name if new_name else member
+                val = st.number_input(
+                    f"💵 {current_member}",
+                    value=int(md["income"].get(current_member, 0)),
+                    min_value=0, step=100000, format="%d",
+                    key=f"inc_{member}_{selected}",
+                    label_visibility="collapsed")
+                md["income"][current_member] = val
 
-    if extra:
-        for name, amt in extra.items():
-            c1, c2, c3 = st.columns([5, 3, 1])
-            c1.write(f"📌 {name}")
-            c2.write(f"**{fmt(amt)}**")
-            if c3.button("🗑️", key=f"del_ex_{name}_{selected}"):
-                del md["extra_income"][name]
-                save(data)
-                st.rerun()
-    else:
-        st.caption("Chưa có thu nhập phát sinh")
-
-    inc_data = {k: v for k, v in md["income"].items() if v > 0}
-    extra_data = {k: v for k, v in md.get("extra_income", {}).items() if v > 0}
-    all_inc = {**inc_data, **extra_data}
-    if all_inc:
+        # --- Thu nhập phát sinh ---
         st.divider()
-        fig, ax = plt.subplots(figsize=(7, 3.5), dpi=150)
-        colors = ["#38ef7d", "#43e97b", "#00f2fe", "#667eea", "#764ba2"]
-        bars = ax.bar(list(all_inc.keys()), list(all_inc.values()),
-                      color=colors[:len(all_inc)], alpha=0.85, edgecolor="white")
-        for bar, val in zip(bars, all_inc.values()):
-            ax.text(bar.get_x() + bar.get_width() / 2., bar.get_height(),
-                    fmt_short(val), ha="center", va="bottom", fontsize=9, fontweight="bold")
-        ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        ax.grid(axis="y", alpha=0.3)
-        fig.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
+        st.markdown("**Thu nhập phát sinh**")
+        extra = md.get("extra_income", {})
+
+        with st.form("add_extra", clear_on_submit=True):
+            ex_name = st.text_input("Nguồn", placeholder="Thưởng, lãi, bán hàng...")
+            ex_amt = st.number_input("Số tiền (VNĐ)", min_value=0, step=100000, format="%d")
+            if st.form_submit_button("➕ Thêm", use_container_width=True, type="primary"):
+                if ex_name and ex_amt > 0:
+                    md.setdefault("extra_income", {})[ex_name] = ex_amt
+                    save(data)
+                    st.rerun()
+
+        if extra:
+            for name, amt in extra.items():
+                c1, c2, c3 = st.columns([4, 3, 1])
+                c1.write(f"📌 {name}")
+                c2.write(f"**{fmt(amt)}**")
+                if c3.button("🗑️", key=f"del_ex_{name}_{selected}"):
+                    del md["extra_income"][name]
+                    save(data)
+                    st.rerun()
+        else:
+            st.caption("Chưa có thu nhập phát sinh")
+
+    # --- Biểu đồ bên phải ---
+    with col_chart:
+        inc_data = {k: v for k, v in md["income"].items() if v > 0}
+        extra_data = {k: v for k, v in md.get("extra_income", {}).items() if v > 0}
+        all_inc = {**inc_data, **extra_data}
+        if all_inc:
+            fig, ax = plt.subplots(figsize=(5, 4), dpi=150)
+            colors = ["#38ef7d", "#43e97b", "#00f2fe", "#667eea", "#764ba2"]
+            bars = ax.bar(list(all_inc.keys()), list(all_inc.values()),
+                          color=colors[:len(all_inc)], alpha=0.85, edgecolor="white")
+            for bar, val in zip(bars, all_inc.values()):
+                ax.text(bar.get_x() + bar.get_width() / 2., bar.get_height(),
+                        fmt_short(val), ha="center", va="bottom", fontsize=9, fontweight="bold")
+            ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            ax.grid(axis="y", alpha=0.3)
+            ax.set_title("Thu nhập theo nguồn", fontsize=12, fontweight="bold")
+            fig.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
+        else:
+            st.info("Chưa có dữ liệu thu nhập")
 
 # ============================================================
 #  TAB 2 — CHI PHÍ
@@ -406,15 +431,21 @@ with tab_exp:
 
     st.divider()
 
+    # Nút lưu
+    save_col1, save_col2, save_col3 = st.columns([1, 2, 1])
+    with save_col2:
+        if st.button("💾 Lưu tất cả thay đổi", type="primary", use_container_width=True,
+                     key="save_expense"):
+            save(data)
+            st.toast("Đã lưu!")
+
     for cat in data["categories"]:
         val = st.number_input(
             cat,
             value=int(md["expenses"].get(cat, 0)),
             min_value=0, step=100000, format="%d",
             key=f"exp_{cat}_{selected}")
-        if val != md["expenses"].get(cat, 0):
-            md["expenses"][cat] = val
-            save(data)
+        md["expenses"][cat] = val
 
     exp_data = {k: v for k, v in md["expenses"].items() if v > 0}
     if exp_data:
