@@ -4,21 +4,20 @@ import os
 import requests
 from datetime import datetime, date
 
-st.set_page_config(page_title="Hũ Chi Tiêu", page_icon="favicon.ico", layout="wide")
+st.set_page_config(page_title="Hũ Chi Tiêu", page_icon="💰", layout="wide")
 
-# ============================================================
-#  PWA META + CSS
-# ============================================================
 st.markdown("""
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Hũ Chi Tiêu">
-<link rel="apple-touch-icon" href="icon.png">
 <meta name="theme-color" content="#667eea">
 """, unsafe_allow_html=True)
 
 st.markdown("""
 <style>
+    /* Icon lớn hơn trên tab browser */
+    [data-testid="stFavicon"] { content: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>"); }
+</style>
     @media (max-width: 768px) {
         .block-container { padding: 1rem 0.5rem !important; }
         .stMetric { padding: 6px 2px !important; }
