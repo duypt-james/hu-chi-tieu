@@ -1,7 +1,7 @@
 import streamlit as st
 import json
-import gspread
-from google.oauth2.service_account import Credentials
+import os
+import requests
 from datetime import datetime, date
 
 st.set_page_config(page_title="Hũ Chi Tiêu", page_icon="💰", layout="wide")
@@ -35,17 +35,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-#  GOOGLE SHEETS
+#  DATA LAYER — GitHub Gist
 # ============================================================
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SHEET_ID = st.secrets.get("SHEET_ID", "")
-SHEET_NAME = "data"
-DATA_CELL = "A1"
+GIST_FILENAME = "hu_chitieu_data.json"
 
 DEFAULT_DATA = {
     "members": ["Duy", "Hà"],
@@ -110,35 +107,36 @@ def calc_month_total(m):
     return inc, exp, inc - exp
 
 
-def get_gsheet():
-    creds = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"], scopes=SCOPES)
-    gc = gspread.authorize(creds)
-    sh = gc.open_by_key(SHEET_ID)
-    try:
-        ws = sh.worksheet(SHEET_NAME)
-    except gspread.exceptions.WorksheetNotFound:
-        ws = sh.add_worksheet(title=SHEET_NAME, rows=100, cols=20)
-    return ws
+def get_gist_config():
+    token = st.secrets.get("GITHUB_TOKEN", "")
+    gist_id = st.secrets.get("GIST_ID", "")
+    return token, gist_id
 
 
 def load_data():
-    try:
-        ws = get_gsheet()
-        raw = ws.acell(DATA_CELL).value
-        if raw:
-            d = json.loads(raw)
-            for mk in d.get("months", {}):
-                d["months"][mk].setdefault("notes", "")
-                d["months"][mk].setdefault("extra_income", {})
-            return d
-    except Exception as e:
-        st.warning(f"Không đọc được Google Sheet: {e}")
+    token, gist_id = get_gist_config()
 
-    # fallback: try local file
-    import os
-    if os.path.exists("family_data.json"):
-        with open("family_data.json", "r", encoding="utf-8") as f:
+    # Try loading from Gist
+    if token and gist_id:
+        try:
+            headers = {"Authorization": f"token {token}"}
+            resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=headers, timeout=10)
+            if resp.status_code == 200:
+                gist = resp.json()
+                if GIST_FILENAME in gist.get("files", {}):
+                    content = gist["files"][GIST_FILENAME]["content"]
+                    d = json.loads(content)
+                    for mk in d.get("months", {}):
+                        d["months"][mk].setdefault("notes", "")
+                        d["months"][mk].setdefault("extra_income", {})
+                    return d
+        except Exception as e:
+            st.warning(f"Không đọc được Gist: {e}")
+
+    # Fallback: local file
+    path = "family_data.json"
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
             d = json.load(f)
         for mk in d.get("months", {}):
             d["months"][mk].setdefault("notes", "")
@@ -151,13 +149,24 @@ def load_data():
 
 
 def save(data):
-    try:
-        ws = get_gsheet()
-        ws.update_acell(DATA_CELL, json.dumps(data, ensure_ascii=False, indent=2))
-    except Exception as e:
-        st.warning(f"Lưu Google Sheet thất bại, lưu local: {e}")
+    token, gist_id = get_gist_config()
+    content = json.dumps(data, ensure_ascii=False, indent=2)
+
+    # Save to Gist
+    if token and gist_id:
+        try:
+            headers = {"Authorization": f"token {token}", "Content-Type": "application/json"}
+            payload = {"files": {GIST_FILENAME: {"content": content}}}
+            resp = requests.patch(f"https://api.github.com/gists/{gist_id}",
+                                  headers=headers, json=payload, timeout=10)
+            if resp.status_code == 200:
+                return
+        except Exception as e:
+            st.warning(f"Lưu Gist thất bại: {e}")
+
+    # Fallback: local file
     with open("family_data.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write(content)
 
 
 if "data" not in st.session_state:
@@ -239,7 +248,12 @@ with st.sidebar:
                     st.rerun()
 
     st.divider()
-    st.caption("Hũ Chi Tiêu v1.0 — Đồng bộ Google Sheets")
+    token, gist_id = get_gist_config()
+    if token and gist_id:
+        st.caption("☁️ Đang dùng GitHub Gist")
+    else:
+        st.caption("💾 Đang dùng file local")
+    st.caption("Hũ Chi Tiêu v1.0")
 
 # ============================================================
 #  HEADER
