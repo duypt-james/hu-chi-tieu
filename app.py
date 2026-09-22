@@ -462,15 +462,37 @@ with tab_exp:
     col_input, col_chart = st.columns([3, 2])
 
     with col_input:
-        for cat in data["categories"]:
-            raw = st.text_input(
-                cat,
-                value=fmt_input(md["expenses"].get(cat, 0)),
-                key=f"exp_{cat}_{selected}",
-                placeholder="0")
-            md["expenses"][cat] = parse_money(raw)
+        # Hiển thị danh mục hiện tại
+        for i, cat in enumerate(data["categories"]):
+            c_name, c_val = st.columns([2, 3])
+            with c_name:
+                new_name = st.text_input("Tên", value=cat, key=f"cat_name_{i}_{selected}",
+                                         label_visibility="collapsed", placeholder="Tên danh mục")
+                if new_name and new_name != cat:
+                    old_val = md["expenses"].pop(cat, 0)
+                    md["expenses"][new_name] = old_val
+                    data["categories"][i] = new_name
+            with c_val:
+                current_cat = new_name if new_name else cat
+                raw = st.text_input(
+                    current_cat,
+                    value=fmt_input(md["expenses"].get(current_cat, 0)),
+                    key=f"exp_{cat}_{selected}",
+                    placeholder="0")
+                md["expenses"][current_cat] = parse_money(raw)
 
         st.divider()
+
+        # Thêm danh mục mới
+        with st.form("add_category", clear_on_submit=True):
+            new_cat_name = st.text_input("Danh mục mới", placeholder="VD: Giải trí, Du lịch...")
+            if st.form_submit_button("➕ Thêm danh mục", use_container_width=True, type="primary"):
+                if new_cat_name and new_cat_name not in data["categories"]:
+                    data["categories"].append(new_cat_name)
+                    md["expenses"][new_cat_name] = 0
+                    save(data)
+                    st.rerun()
+
         if st.button("💾 Lưu lên cloud", type="primary", use_container_width=True,
                      key="save_expense"):
             save(data)
