@@ -432,79 +432,92 @@ with tab_inc:
 with tab_exp:
     st.subheader("🛒 Chi tiêu")
 
+    # Tính lại tổng realtime
+    now_exp = sum(md["expenses"].values())
+    now_inc = sum(md["income"].values()) + sum(md.get("extra_income", {}).values())
+
+    # 3 ô tổng quan — full width
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown(f"""<div class="summary-card card-red">
-            <div class="label">Tổng chi tiêu</div>
-            <div class="value">{fmt(total_exp)}</div>
-            <div class="sub">{fmt_delta(delta_exp)} so tháng trước</div>
+            <div class="label">Chi tiêu</div>
+            <div class="value">{fmt(now_exp)}</div>
+            <div class="sub">{fmt_delta(now_exp - prev_exp)} so tháng trước</div>
         </div>""", unsafe_allow_html=True)
     with c2:
         st.markdown(f"""<div class="summary-card card-green">
             <div class="label">Thu nhập</div>
-            <div class="value">{fmt(total_inc)}</div>
+            <div class="value">{fmt(now_inc)}</div>
         </div>""", unsafe_allow_html=True)
     with c3:
-        st.markdown(f"""<div class="summary-card {'card-green' if balance >= 0 else 'card-red'}">
+        now_bal = now_inc - now_exp
+        st.markdown(f"""<div class="summary-card {'card-green' if now_bal >= 0 else 'card-red'}">
             <div class="label">Còn lại</div>
-            <div class="value">{fmt(balance)}</div>
+            <div class="value">{fmt(now_bal)}</div>
         </div>""", unsafe_allow_html=True)
 
     st.divider()
 
-    # Nút lưu
-    save_col1, save_col2, save_col3 = st.columns([1, 2, 1])
-    with save_col2:
-        if st.button("💾 Lưu tất cả thay đổi", type="primary", use_container_width=True,
+    # 2 cột: trái = nhập liệu, phải = biểu đồ
+    col_input, col_chart = st.columns([3, 2])
+
+    with col_input:
+        for cat in data["categories"]:
+            raw = st.text_input(
+                cat,
+                value=fmt_input(md["expenses"].get(cat, 0)),
+                key=f"exp_{cat}_{selected}",
+                placeholder="0")
+            md["expenses"][cat] = parse_money(raw)
+
+        st.divider()
+        if st.button("💾 Lưu lên cloud", type="primary", use_container_width=True,
                      key="save_expense"):
             save(data)
             st.toast("Đã lưu!")
 
-    for cat in data["categories"]:
-        val = st.number_input(
-            cat,
-            value=int(md["expenses"].get(cat, 0)),
-            min_value=0, step=100000, format="%d",
-            key=f"exp_{cat}_{selected}")
-        md["expenses"][cat] = val
+    with col_chart:
+        exp_data = {k: v for k, v in md["expenses"].items() if v > 0}
+        if exp_data:
+            sorted_exp = dict(sorted(exp_data.items(), key=lambda x: x[1], reverse=True))
 
-    exp_data = {k: v for k, v in md["expenses"].items() if v > 0}
-    if exp_data:
-        st.divider()
-        sorted_exp = dict(sorted(exp_data.items(), key=lambda x: x[1], reverse=True))
+            # Biểu đồ cột ngang
+            fig, ax = plt.subplots(figsize=(5, 4), dpi=150)
+            colors = ["#f45c43", "#f093fb", "#667eea", "#4facfe", "#43e97b", "#fa709a"]
+            bars = ax.barh(list(sorted_exp.keys()), list(sorted_exp.values()),
+                           color=colors[:len(sorted_exp)], alpha=0.85, edgecolor="white")
+            max_val = max(sorted_exp.values()) if sorted_exp else 1
+            for bar, val in zip(bars, sorted_exp.values()):
+                pct = val / now_exp * 100 if now_exp > 0 else 0
+                ax.text(bar.get_width() + max_val * 0.01,
+                        bar.get_y() + bar.get_height() / 2.,
+                        f"{fmt_short(val)} ({pct:.0f}%)", ha="left", va="center", fontsize=9, fontweight="bold")
+            ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            ax.grid(axis="x", alpha=0.3)
+            ax.set_title("Chi tiêu theo nhóm", fontsize=12, fontweight="bold")
+            fig.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
 
-        fig, ax = plt.subplots(figsize=(7, 4), dpi=150)
-        colors = ["#f45c43", "#f093fb", "#667eea", "#4facfe", "#43e97b", "#fa709a"]
-        bars = ax.barh(list(sorted_exp.keys()), list(sorted_exp.values()),
-                       color=colors[:len(sorted_exp)], alpha=0.85, edgecolor="white")
-        max_val = max(sorted_exp.values()) if sorted_exp else 1
-        for bar, val in zip(bars, sorted_exp.values()):
-            pct = val / total_exp * 100 if total_exp > 0 else 0
-            ax.text(bar.get_width() + max_val * 0.01,
-                    bar.get_y() + bar.get_height() / 2.,
-                    f"{fmt(val)} ({pct:.0f}%)", ha="left", va="center", fontsize=9, fontweight="bold")
-        ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        ax.grid(axis="x", alpha=0.3)
-        fig.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
-
-        fig2, ax2 = plt.subplots(figsize=(5, 5), dpi=150)
-        wedges, texts, autotexts = ax2.pie(
-            sorted_exp.values(), labels=None,
-            autopct=lambda p: f"{p:.1f}%" if p > 4 else "",
-            colors=colors[:len(sorted_exp)], startangle=90,
-            pctdistance=0.8, wedgeprops=dict(width=0.5, edgecolor="white"))
-        for t in autotexts:
-            t.set_fontsize(9)
-            t.set_fontweight("bold")
-        ax2.legend(sorted_exp.keys(), loc="center left", bbox_to_anchor=(1, 0.5), fontsize=10)
-        ax2.set_title("Phân bổ chi tiêu", fontsize=13, fontweight="bold", pad=10)
-        fig2.tight_layout()
-        st.pyplot(fig2)
-        plt.close(fig2)
+            # Pie chart donut
+            fig2, ax2 = plt.subplots(figsize=(4, 4), dpi=150)
+            wedges, texts, autotexts = ax2.pie(
+                sorted_exp.values(), labels=None,
+                autopct=lambda p: f"{p:.1f}%" if p > 4 else "",
+                colors=colors[:len(sorted_exp)], startangle=90,
+                pctdistance=0.8, wedgeprops=dict(width=0.5, edgecolor="white"))
+            for t in autotexts:
+                t.set_fontsize(9)
+                t.set_fontweight("bold")
+            ax2.legend(sorted_exp.keys(), loc="center left", bbox_to_anchor=(1, 0.5), fontsize=9)
+            ax2.set_title("Phân bổ", fontsize=12, fontweight="bold", pad=10)
+            fig2.tight_layout()
+            st.pyplot(fig2)
+            plt.close(fig2)
+        else:
+            st.info("Chưa có dữ liệu chi tiêu")
 
 # ============================================================
 #  TAB 3 — TIẾT KIỆM
