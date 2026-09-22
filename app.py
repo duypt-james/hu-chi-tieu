@@ -1,11 +1,8 @@
 import streamlit as st
 import json
-import os
+import gspread
+from google.oauth2.service_account import Credentials
 from datetime import datetime, date
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-import matplotlib
-matplotlib.use("Agg")
 
 st.set_page_config(page_title="Hũ Chi Tiêu", page_icon="💰", layout="wide")
 
@@ -34,15 +31,22 @@ st.markdown("""
     .summary-card .label { font-size: 11px; color: #666; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
     .summary-card .value { font-size: 20px; font-weight: 700; color: #1a1a2e; }
     .summary-card .sub { font-size: 11px; color: #888; margin-top: 2px; }
-    .delta-up { color: #38ef7d !important; }
-    .delta-down { color: #f45c43 !important; }
-    .section-divider { margin: 16px 0 8px 0; padding-bottom: 4px; border-bottom: 1px solid #e0e0e0; }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-#  DATA
+#  GOOGLE SHEETS
 # ============================================================
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+SHEET_ID = st.secrets.get("SHEET_ID", "")
+SHEET_NAME = "data"
+DATA_CELL = "A1"
+
 DEFAULT_DATA = {
     "members": ["Duy", "Hà"],
     "categories": [
@@ -70,10 +74,6 @@ def fmt_delta(v):
     return f"{sign}{fmt_short(v)}"
 
 
-def month_key(dt):
-    return dt.strftime("%Y-%m")
-
-
 def month_label(mk):
     try:
         return datetime.strptime(mk, "%Y-%m").strftime("Tháng %m/%Y")
@@ -90,9 +90,7 @@ def month_short(mk):
 
 def prev_month_key(mk):
     dt = datetime.strptime(mk, "%Y-%m")
-    if dt.month == 1:
-        return f"{dt.year - 1}-12"
-    return f"{dt.year}-{dt.month - 1:02d}"
+    return f"{dt.year - 1}-12" if dt.month == 1 else f"{dt.year}-{dt.month - 1:02d}"
 
 
 def new_month(copy_from=None):
@@ -112,22 +110,52 @@ def calc_month_total(m):
     return inc, exp, inc - exp
 
 
+def get_gsheet():
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"], scopes=SCOPES)
+    gc = gspread.authorize(creds)
+    sh = gc.open_by_key(SHEET_ID)
+    try:
+        ws = sh.worksheet(SHEET_NAME)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sh.add_worksheet(title=SHEET_NAME, rows=100, cols=20)
+    return ws
+
+
 def load_data():
-    path = "family_data.json"
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
+    try:
+        ws = get_gsheet()
+        raw = ws.acell(DATA_CELL).value
+        if raw:
+            d = json.loads(raw)
+            for mk in d.get("months", {}):
+                d["months"][mk].setdefault("notes", "")
+                d["months"][mk].setdefault("extra_income", {})
+            return d
+    except Exception as e:
+        st.warning(f"Không đọc được Google Sheet: {e}")
+
+    # fallback: try local file
+    import os
+    if os.path.exists("family_data.json"):
+        with open("family_data.json", "r", encoding="utf-8") as f:
             d = json.load(f)
-        # migrate: add notes field to months that don't have it
         for mk in d.get("months", {}):
             d["months"][mk].setdefault("notes", "")
             d["months"][mk].setdefault("extra_income", {})
         return d
+
     data = dict(DEFAULT_DATA)
-    data["months"][month_key(date.today())] = new_month()
+    data["months"][datetime.today().strftime("%Y-%m")] = new_month()
     return data
 
 
 def save(data):
+    try:
+        ws = get_gsheet()
+        ws.update_acell(DATA_CELL, json.dumps(data, ensure_ascii=False, indent=2))
+    except Exception as e:
+        st.warning(f"Lưu Google Sheet thất bại, lưu local: {e}")
     with open("family_data.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -142,7 +170,10 @@ data = st.session_state.data
 with st.sidebar:
     st.markdown("### ⚙️ Quản lý")
 
-    # Import / Export
+    st.download_button("📥 Export JSON",
+                       json.dumps(data, ensure_ascii=False, indent=2),
+                       file_name="family_data.json", mime="application/json")
+
     uploaded = st.file_uploader("Import JSON", type=["json"])
     if uploaded:
         try:
@@ -158,20 +189,13 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Lỗi: {e}")
 
-    st.download_button("📥 Export JSON",
-                       json.dumps(data, ensure_ascii=False, indent=2),
-                       file_name="family_data.json", mime="application/json")
-
     st.divider()
-
-    # Chọn tháng
     st.markdown("#### 📅 Chọn tháng")
     all_months = sorted(data["months"].keys(), reverse=True)
     selected = st.selectbox("Tháng", all_months,
                             format_func=month_label, label_visibility="collapsed",
                             key="month_select")
 
-    # Thêm tháng
     with st.expander("➕ Thêm tháng mới"):
         new_y = st.number_input("Năm", value=date.today().year,
                                 min_value=2020, max_value=2030, step=1, key="new_y")
@@ -195,7 +219,6 @@ with st.sidebar:
             else:
                 st.warning("Tháng đã tồn tại!")
 
-    # Xóa tháng
     if len(all_months) > 1:
         with st.expander("🗑️ Xóa tháng"):
             del_sel = st.selectbox("Chọn tháng xóa", all_months,
@@ -216,7 +239,7 @@ with st.sidebar:
                     st.rerun()
 
     st.divider()
-    st.caption("Hũ Chi Tiêu v1.0")
+    st.caption("Hũ Chi Tiêu v1.0 — Đồng bộ Google Sheets")
 
 # ============================================================
 #  HEADER
@@ -224,7 +247,6 @@ with st.sidebar:
 md = data["months"].setdefault(selected, new_month())
 total_inc, total_exp, balance = calc_month_total(md)
 
-# So sánh với tháng trước
 prev_mk = prev_month_key(selected)
 prev_data = data["months"].get(prev_mk)
 prev_inc, prev_exp, prev_bal = (0, 0, 0)
@@ -247,7 +269,7 @@ st.markdown(f"""
 <div class="hdr">
     <div>
         <h1>💰 HŨ CHI TIÊU GIA ĐÌNH</h1>
-        <div class="sub">{month_label(selected)} • Dư: {fmt(balance)}</div>
+        <div class="sub">{month_label(selected)} — Dư: {fmt(balance)}</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -263,13 +285,12 @@ tab_inc, tab_exp, tab_bal = st.tabs(["💵 Thu nhập", "🛒 Chi phí", "💰 T
 with tab_inc:
     st.subheader("💵 Thu nhập")
 
-    # Summary cards
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown(f"""<div class="summary-card card-green">
             <div class="label">Tổng thu nhập</div>
             <div class="value">{fmt(total_inc)}</div>
-            <div class="sub">{fmt_delta(delta_inc)} so với tháng trước</div>
+            <div class="sub">{fmt_delta(delta_inc)} so tháng trước</div>
         </div>""", unsafe_allow_html=True)
     with c2:
         st.markdown(f"""<div class="summary-card card-gray">
@@ -280,12 +301,11 @@ with tab_inc:
         st.markdown(f"""<div class="summary-card {'card-green' if balance >= 0 else 'card-red'}">
             <div class="label">Tiết kiệm</div>
             <div class="value">{fmt(balance)}</div>
-            <div class="sub">{fmt_delta(delta_bal)} so với tháng trước</div>
+            <div class="sub">{fmt_delta(delta_bal)} so tháng trước</div>
         </div>""", unsafe_allow_html=True)
 
     st.divider()
 
-    # Thu nhập chính
     st.markdown("**Thu nhập cố định**")
     for member in data["members"]:
         val = st.number_input(
@@ -298,8 +318,6 @@ with tab_inc:
             save(data)
 
     st.divider()
-
-    # Thu nhập phát sinh
     st.markdown("**Thu nhập phát sinh**")
     extra = md.get("extra_income", {})
 
@@ -327,7 +345,6 @@ with tab_inc:
     else:
         st.caption("Chưa có thu nhập phát sinh")
 
-    # Biểu đồ
     inc_data = {k: v for k, v in md["income"].items() if v > 0}
     extra_data = {k: v for k, v in md.get("extra_income", {}).items() if v > 0}
     all_inc = {**inc_data, **extra_data}
@@ -336,7 +353,7 @@ with tab_inc:
         fig, ax = plt.subplots(figsize=(7, 3.5), dpi=150)
         colors = ["#38ef7d", "#43e97b", "#00f2fe", "#667eea", "#764ba2"]
         bars = ax.bar(list(all_inc.keys()), list(all_inc.values()),
-                      color=colors[:len(all_inc)], alpha=0.85, edgecolor="white", linewidth=0.5)
+                      color=colors[:len(all_inc)], alpha=0.85, edgecolor="white")
         for bar, val in zip(bars, all_inc.values()):
             ax.text(bar.get_x() + bar.get_width() / 2., bar.get_height(),
                     fmt_short(val), ha="center", va="bottom", fontsize=9, fontweight="bold")
@@ -354,13 +371,12 @@ with tab_inc:
 with tab_exp:
     st.subheader("🛒 Chi tiêu")
 
-    # Summary cards
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown(f"""<div class="summary-card card-red">
             <div class="label">Tổng chi tiêu</div>
             <div class="value">{fmt(total_exp)}</div>
-            <div class="sub">{fmt_delta(delta_exp)} so với tháng trước</div>
+            <div class="sub">{fmt_delta(delta_exp)} so tháng trước</div>
         </div>""", unsafe_allow_html=True)
     with c2:
         st.markdown(f"""<div class="summary-card card-green">
@@ -376,9 +392,6 @@ with tab_exp:
     st.divider()
 
     for cat in data["categories"]:
-        prev_val = 0
-        if prev_data:
-            prev_val = prev_data["expenses"].get(cat, 0)
         val = st.number_input(
             cat,
             value=int(md["expenses"].get(cat, 0)),
@@ -388,17 +401,15 @@ with tab_exp:
             md["expenses"][cat] = val
             save(data)
 
-    # Biểu đồ chi tiêu
     exp_data = {k: v for k, v in md["expenses"].items() if v > 0}
     if exp_data:
         st.divider()
         sorted_exp = dict(sorted(exp_data.items(), key=lambda x: x[1], reverse=True))
 
-        # Bar chart
         fig, ax = plt.subplots(figsize=(7, 4), dpi=150)
         colors = ["#f45c43", "#f093fb", "#667eea", "#4facfe", "#43e97b", "#fa709a"]
         bars = ax.barh(list(sorted_exp.keys()), list(sorted_exp.values()),
-                       color=colors[:len(sorted_exp)], alpha=0.85, edgecolor="white", linewidth=0.5)
+                       color=colors[:len(sorted_exp)], alpha=0.85, edgecolor="white")
         max_val = max(sorted_exp.values()) if sorted_exp else 1
         for bar, val in zip(bars, sorted_exp.values()):
             pct = val / total_exp * 100 if total_exp > 0 else 0
@@ -413,7 +424,6 @@ with tab_exp:
         st.pyplot(fig)
         plt.close(fig)
 
-        # Pie chart donut
         fig2, ax2 = plt.subplots(figsize=(5, 5), dpi=150)
         wedges, texts, autotexts = ax2.pie(
             sorted_exp.values(), labels=None,
@@ -435,10 +445,7 @@ with tab_exp:
 with tab_bal:
     st.subheader("💰 Tiết kiệm")
 
-    # Summary cards
     rate = (balance / total_inc * 100) if total_inc > 0 else 0
-    prev_rate = (prev_bal / prev_inc * 100) if prev_inc > 0 else 0
-    rate_delta = rate - prev_rate
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -460,7 +467,6 @@ with tab_bal:
             <div class="sub">{fmt_delta(delta_bal)}</div>
         </div>""", unsafe_allow_html=True)
 
-    # Ghi chú
     with st.expander("📝 Ghi chú tháng này", expanded=False):
         notes = st.text_area("Ghi chú", value=md.get("notes", ""),
                              key=f"notes_{selected}", height=80,
@@ -469,7 +475,6 @@ with tab_bal:
             md["notes"] = notes
             save(data)
 
-    # Dữ liệu các tháng
     sorted_months = sorted(data["months"].keys())
     labels = [month_short(m) for m in sorted_months]
     inc_list, exp_list, bal_list = [], [], []
@@ -480,14 +485,11 @@ with tab_bal:
         exp_list.append(exp)
         bal_list.append(bal)
 
-    # Biểu đồ xu hướng
     st.divider()
     if len(sorted_months) >= 2:
         st.markdown("#### 📈 Xu hướng")
-
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5), dpi=150)
 
-        # Grouped bar
         x = range(len(labels))
         w = 0.25
         ax1.bar([i - w for i in x], inc_list, width=w, label="Thu nhập", color="#38ef7d", alpha=0.85)
@@ -502,7 +504,6 @@ with tab_bal:
         ax1.spines["right"].set_visible(False)
         ax1.grid(axis="y", alpha=0.3)
 
-        # Savings line
         ax2.plot(labels, bal_list, marker="o", color="#667eea", linewidth=2.5, markersize=6)
         ax2.fill_between(labels, bal_list, alpha=0.15, color="#667eea")
         for i, v in enumerate(bal_list):
@@ -515,12 +516,10 @@ with tab_bal:
         ax2.spines["top"].set_visible(False)
         ax2.spines["right"].set_visible(False)
         ax2.grid(axis="y", alpha=0.3)
-
         fig.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
 
-        # Chi tiêu theo nhóm qua tháng
         st.markdown("#### 📊 Chi tiêu theo nhóm")
         cat_data = {c: [] for c in data["categories"]}
         for mk in sorted_months:
@@ -561,7 +560,6 @@ with tab_bal:
             st.pyplot(fig)
             plt.close(fig)
 
-    # Bảng lịch sử số dư
     st.divider()
     st.markdown("#### 📋 Lịch sử số dư")
     rows = []
