@@ -318,7 +318,33 @@ def fmt_input(v):
 with tab_inc:
     st.subheader("💵 Thu nhập")
 
-    # 2 cột: trái = nhập liệu, phải = biểu đồ + tổng
+    # Tính lại tổng realtime
+    now_inc = sum(md["income"].values()) + sum(md.get("extra_income", {}).values())
+
+    # 3 ô tổng quan — full width
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f"""<div class="summary-card card-green">
+            <div class="label">Thu nhập</div>
+            <div class="value">{fmt(now_inc)}</div>
+            <div class="sub">{fmt_delta(now_inc - prev_inc)} so tháng trước</div>
+        </div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""<div class="summary-card card-gray">
+            <div class="label">Chi tiêu</div>
+            <div class="value">{fmt(total_exp)}</div>
+        </div>""", unsafe_allow_html=True)
+    with c3:
+        now_bal = now_inc - total_exp
+        st.markdown(f"""<div class="summary-card {'card-green' if now_bal >= 0 else 'card-red'}">
+            <div class="label">Tiết kiệm</div>
+            <div class="value">{fmt(now_bal)}</div>
+            <div class="sub">{fmt_delta(now_bal - prev_bal)} so tháng trước</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.divider()
+
+    # 2 cột: trái = nhập liệu, phải = biểu đồ
     col_input, col_chart = st.columns([3, 2])
 
     with col_input:
@@ -376,29 +402,8 @@ with tab_inc:
             save(data)
             st.toast("Đã lưu!")
 
-    # --- Biểu đồ + Tổng bên phải ---
+    # --- Biểu đồ bên phải ---
     with col_chart:
-        # Tính lại tổng realtime
-        now_inc = sum(md["income"].values()) + sum(md.get("extra_income", {}).values())
-
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.markdown(f"""<div class="summary-card card-green">
-                <div class="label">Thu nhập</div>
-                <div class="value">{fmt(now_inc)}</div>
-            </div>""", unsafe_allow_html=True)
-        with c2:
-            st.markdown(f"""<div class="summary-card card-gray">
-                <div class="label">Chi tiêu</div>
-                <div class="value">{fmt(total_exp)}</div>
-            </div>""", unsafe_allow_html=True)
-        with c3:
-            now_bal = now_inc - total_exp
-            st.markdown(f"""<div class="summary-card {'card-green' if now_bal >= 0 else 'card-red'}">
-                <div class="label">Tiết kiệm</div>
-                <div class="value">{fmt(now_bal)}</div>
-            </div>""", unsafe_allow_html=True)
-
         inc_data = {k: v for k, v in md["income"].items() if v > 0}
         extra_data = {k: v for k, v in md.get("extra_income", {}).items() if v > 0}
         all_inc = {**inc_data, **extra_data}
