@@ -336,26 +336,13 @@ with tab_inc:
             with c_val:
                 current_member = new_name if new_name else member
                 current_val = md["income"].get(current_member, 0)
-
-                raw_key = f"raw_inc_{member}_{selected}"
-                if raw_key not in st.session_state:
-                    st.session_state[raw_key] = fmt_input(current_val)
-
                 raw = st.text_input(
                     f"💵 {current_member}",
-                    value=st.session_state[raw_key],
+                    value=fmt_input(current_val),
                     key=f"inc_{member}_{selected}",
                     label_visibility="collapsed",
                     placeholder="0")
-
-                parsed = parse_money(raw)
-                formatted = fmt_input(parsed)
-                if raw != formatted:
-                    st.session_state[raw_key] = formatted
-                    md["income"][current_member] = parsed
-                    st.rerun()
-                else:
-                    md["income"][current_member] = parsed
+                md["income"][current_member] = parse_money(raw)
 
         # --- Thu nhập phát sinh ---
         st.divider()
