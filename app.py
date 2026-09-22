@@ -4,11 +4,19 @@ import os
 import requests
 from datetime import datetime, date
 
-st.set_page_config(page_title="Hũ Chi Tiêu", page_icon="💰", layout="wide")
+st.set_page_config(page_title="Hũ Chi Tiêu", page_icon="favicon.ico", layout="wide")
 
 # ============================================================
-#  CSS
+#  PWA META + CSS
 # ============================================================
+st.markdown("""
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hũ Chi Tiêu">
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="theme-color" content="#667eea">
+""", unsafe_allow_html=True)
+
 st.markdown("""
 <style>
     @media (max-width: 768px) {
