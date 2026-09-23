@@ -11,6 +11,7 @@
     <link rel="apple-touch-icon" href="icon-192.png">
     <title>Hũ Chi Tiêu</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
     <style>
         :root {
             --primary: #667eea;
@@ -114,7 +115,10 @@
 </head>
 <body>
     <div class="header">
-        <h1>💰 HŨ CHI TIÊU</h1>
+        <div style="display:flex;align-items:center;gap:10px">
+            <button onclick="toggleSidebar()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:6px 10px;border-radius:6px;font-size:16px;cursor:pointer">☰</button>
+            <h1>💰 HŨ CHI TIÊU</h1>
+        </div>
         <div class="header-actions">
             <span id="sync-status" style="font-size:11px"></span>
             <button onclick="exportData()">📥 Export</button>
@@ -223,7 +227,7 @@
             </div>
             <div class="card">
                 <div class="card-title">📝 Ghi chú tháng này</div>
-                <textarea id="notes" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px;min-height:60px" placeholder="Ghi chú chi tiêu tháng này..." oninput="setDirty()"></textarea>
+                <textarea id="notes" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px;min-height:60px" placeholder="Ghi chú chi tiêu tháng này..." oninput="saveNotes()"></textarea>
             </div>
         </div>
     </div>

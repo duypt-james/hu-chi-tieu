@@ -3,6 +3,8 @@ const PERSONAL_RATE = 0.15;
 const GIST_FILENAME = 'hu_chitieu_data.json';
 const CHART_COLORS = ['#1a73e8', '#34a853', '#fbbc04', '#9334e6', '#ff6d01', '#ea4335', '#4facfe', '#00f2fe', '#43e97b', '#fa709a'];
 
+Chart.register(ChartDataLabels);
+
 const GH_TOKEN_KEY = 'hu_gh_token';
 const GH_GIST_KEY = 'hu_gh_gist';
 const GH_SHA_KEY = 'hu_gh_sha';
@@ -127,11 +129,9 @@ let _data = loadData();
 let _selected = Object.keys(_data.months).sort().reverse()[0] || currentMonthKey();
 let _charts = {};
 
-function setDirty() { _dirty = true; }
+function setDirty() { _dirty = true; saveData(_data); _dirty = false; }
 
-function autoSave() {
-    if (_dirty) { saveData(_data); _dirty = false; }
-}
+function autoSave() { saveData(_data); }
 
 // ============================================================
 //  SYNC — GitHub Gist
@@ -338,6 +338,12 @@ function renderNotes(md) {
     document.getElementById('notes').value = md.notes || '';
 }
 
+function saveNotes() {
+    const md = _data.months[_selected];
+    md.notes = document.getElementById('notes').value;
+    saveData(_data);
+}
+
 // ============================================================
 //  ACTIONS
 // ============================================================
@@ -514,8 +520,23 @@ function renderExpenseChart(md) {
             datasets: [{ data: entries.map(e => e[1]), backgroundColor: CHART_COLORS.slice(0, entries.length), borderRadius: 4, borderSkipped: false }]
         },
         options: {
-            ...chartOpts('Chi tiêu theo nhóm', v => `${fmtShort(v)} (${(v / total * 100).toFixed(0)}%)`),
-            indexAxis: 'y'
+            ...chartOpts('Chi tiêu theo nhóm', v => `${fmtShort(v)} (${(v / total * 100).toFixed(0)}%)`, true),
+            indexAxis: 'y',
+            plugins: {
+                ...chartOpts('', v => '', true).plugins,
+                datalabels: {
+                    display: true,
+                    anchor: 'end',
+                    align: 'right',
+                    offset: 4,
+                    font: { size: 9, weight: '600' },
+                    color: '#444',
+                    formatter: (v, ctx) => {
+                        const pct = (v / total * 100).toFixed(0);
+                        return `${fmtShort(v)} (${pct}%)`;
+                    }
+                }
+            }
         }
     });
 }
@@ -527,6 +548,7 @@ function renderPieChart(md) {
     Object.entries(md.expenses || {}).forEach(([k, v]) => { if (v > 0) chartData[k] = v; });
     const entries = Object.entries(chartData).sort((a, b) => b[1] - a[1]);
     if (!entries.length) return;
+    const total = entries.reduce((a, e) => a + e[1], 0);
     destroyChart('chart-pie');
     _charts['chart-pie'] = new Chart(document.getElementById('chart-pie'), {
         type: 'doughnut',
@@ -538,7 +560,16 @@ function renderPieChart(md) {
             responsive: true, maintainAspectRatio: false,
             plugins: {
                 legend: { display: true, position: 'right', labels: { boxWidth: 10, font: { size: 10 } } },
-                tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmt(ctx.raw)}` } }
+                tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmt(ctx.raw)}` } },
+                datalabels: {
+                    display: true,
+                    color: '#fff',
+                    font: { size: 9, weight: '600' },
+                    formatter: (v, ctx) => {
+                        const pct = (v / total * 100).toFixed(0);
+                        return pct > 4 ? `${pct}%` : '';
+                    }
+                }
             }
         }
     });
@@ -591,7 +622,14 @@ function renderStackChart() {
                 borderSkipped: false
             }))
         },
-        options: { ...chartOpts('Tích lũy', v => fmtShort(v)), scales: { x: { stacked: true }, y: { stacked: true } } }
+        options: {
+            ...chartOpts('Tích lũy', v => fmtShort(v), false),
+            scales: { x: { stacked: true }, y: { stacked: true } },
+            plugins: {
+                ...chartOpts('', v => '', false).plugins,
+                datalabels: { display: false }
+            }
+        }
     });
 }
 
@@ -610,14 +648,23 @@ function renderBalanceChart() {
     });
 }
 
-function chartOpts(title, tickFmt) {
+function chartOpts(title, tickFmt, isBar = true) {
     return {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
             legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 10 } } },
             tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) } },
-            title: { display: false }
+            title: { display: false },
+            datalabels: isBar ? {
+                display: true,
+                anchor: 'end',
+                align: 'top',
+                offset: 2,
+                font: { size: 9, weight: '600' },
+                color: '#444',
+                formatter: v => fmtShort(v)
+            } : { display: false }
         },
         scales: {
             y: { ticks: { callback: v => tickFmt(v), font: { size: 9 } }, grid: { color: '#f0f0f0' } },
