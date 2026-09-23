@@ -944,8 +944,8 @@ function renderSidebar() {
             <div class="form-group"><label>Token</label><input type="password" id="gh-token" value="${cfg.token}" placeholder="ghp_xxx..."></div>
             <div class="form-group"><label>Gist ID</label><input type="text" id="gh-gist" value="${cfg.gistId}" placeholder="c6c9f18338db505866b0fc1d5d1201a8"></div>
             <div style="font-size:10px;color:var(--text2);margin-bottom:8px">Gist ID hiện tại: <b>${cfg.gistId || 'chưa có'}</b></div>
+            <button class="btn btn-orange" style="width:100%;margin-bottom:8px;padding:12px;font-size:14px" onclick="testGHConnection()">🧪 Test kết nối</button>
             <button class="btn btn-primary" style="width:100%;margin-bottom:6px" onclick="saveGHSettings()">💾 Lưu & Thử lại</button>
-            <button class="btn btn-orange" style="width:100%;margin-bottom:6px" onclick="testGHConnection()">🧪 Test kết nối</button>
             <button class="btn btn-red" style="width:100%" onclick="resetGHSettings()">🗑️ Xóa cài đặt</button>
             <div style="font-size:10px;color:var(--text2);margin-top:4px">Tạo PAT tại <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a> với quyền <b>gist</b></div>
         </div>
