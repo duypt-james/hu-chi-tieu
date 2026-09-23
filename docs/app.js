@@ -623,6 +623,45 @@ function resetGHSettings() {
     setTimeout(() => setSyncStatus(''), 2000);
 }
 
+async function testGHConnection() {
+    const token = document.getElementById('gh-token')?.value?.trim() || '';
+    const gistId = document.getElementById('gh-gist')?.value?.trim() || '';
+    if (!token || !gistId) { alert('Nhập Token và Gist ID trước!'); return; }
+    let report = '=== TEST KẾT NỐI ===\n\n';
+    try {
+        setSyncStatus('🔄 Đang test...', '#f57c00');
+        const userRes = await fetch('https://api.github.com/user', {
+            headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+        });
+        if (userRes.ok) {
+            const user = await userRes.json();
+            report += `✅ Token hợp lệ — User: ${user.login}\n`;
+            report += `   Scopes: ${user.scopes?.join(', ') || 'không thấy'}\n`;
+            if (!user.scopes?.includes('gist')) {
+                report += `⚠️ THIẾU QUYỀN "gist"! Tạo token mới tại:\n   https://github.com/settings/tokens\n`;
+            }
+        } else {
+            report += `❌ Token KHÔNG hợp lệ — HTTP ${userRes.status}\n`;
+        }
+        const gistRes = await fetch(`https://api.github.com/gists/${gistId}`, {
+            headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
+        });
+        if (gistRes.ok) {
+            const gist = await gistRes.json();
+            const files = Object.keys(gist.files || {});
+            report += `✅ Gist tồn tại — Files: ${files.join(', ')}\n`;
+            report += `   Owner: ${gist.owner?.login}\n`;
+            report += `   Public: ${gist.public}\n`;
+        } else {
+            report += `❌ Gist KHÔNG tồn tại hoặc không có quyền — HTTP ${gistRes.status}\n`;
+        }
+    } catch (e) {
+        report += `❌ Lỗi mạng: ${e.message}\n`;
+    }
+    alert(report);
+    setSyncStatus('');
+}
+
 // ============================================================
 //  CHARTS — Chart.js
 // ============================================================
@@ -906,6 +945,7 @@ function renderSidebar() {
             <div class="form-group"><label>Gist ID</label><input type="text" id="gh-gist" value="${cfg.gistId}" placeholder="c6c9f18338db505866b0fc1d5d1201a8"></div>
             <div style="font-size:10px;color:var(--text2);margin-bottom:8px">Gist ID hiện tại: <b>${cfg.gistId || 'chưa có'}</b></div>
             <button class="btn btn-primary" style="width:100%;margin-bottom:6px" onclick="saveGHSettings()">💾 Lưu & Thử lại</button>
+            <button class="btn btn-orange" style="width:100%;margin-bottom:6px" onclick="testGHConnection()">🧪 Test kết nối</button>
             <button class="btn btn-red" style="width:100%" onclick="resetGHSettings()">🗑️ Xóa cài đặt</button>
             <div style="font-size:10px;color:var(--text2);margin-top:4px">Tạo PAT tại <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a> với quyền <b>gist</b></div>
         </div>
