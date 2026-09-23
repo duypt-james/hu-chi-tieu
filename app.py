@@ -6,11 +6,15 @@ from datetime import datetime, date
 
 st.set_page_config(page_title="Hũ Chi Tiêu", page_icon="💰", layout="wide")
 
-st.markdown("""
+ICON_URL = "https://raw.githubusercontent.com/duypt-james/hu-chi-tieu/master/icon.png"
+
+st.markdown(f"""
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Hũ Chi Tiêu">
 <meta name="theme-color" content="#667eea">
+<link rel="apple-touch-icon" href="{ICON_URL}">
+<link rel="icon" type="image/png" href="{ICON_URL}">
 <style>
     @media (max-width: 768px) {
         .block-container { padding: 1rem 0.5rem !important; }
