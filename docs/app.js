@@ -517,24 +517,44 @@ function renderExpenseChart(md) {
         type: 'bar',
         data: {
             labels: entries.map(e => e[0]),
-            datasets: [{ data: entries.map(e => e[1]), backgroundColor: CHART_COLORS.slice(0, entries.length), borderRadius: 4, borderSkipped: false }]
+            datasets: [{
+                label: 'Chi tiêu',
+                data: entries.map(e => e[1]),
+                backgroundColor: CHART_COLORS.slice(0, entries.length),
+                borderRadius: 4,
+                borderSkipped: false
+            }]
         },
         options: {
-            ...chartOpts('Chi tiêu theo nhóm', v => `${fmtShort(v)} (${(v / total * 100).toFixed(0)}%)`, true),
+            responsive: true,
+            maintainAspectRatio: false,
             indexAxis: 'y',
+            layout: { padding: { right: 60 } },
             plugins: {
-                ...chartOpts('', v => '', true).plugins,
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => fmt(ctx.raw) } },
                 datalabels: {
                     display: true,
                     anchor: 'end',
                     align: 'right',
                     offset: 4,
-                    font: { size: 9, weight: '600' },
+                    font: { size: 10, weight: '600' },
                     color: '#444',
-                    formatter: (v, ctx) => {
+                    formatter: (v) => {
                         const pct = (v / total * 100).toFixed(0);
                         return `${fmtShort(v)} (${pct}%)`;
                     }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: '#f0f0f0' },
+                    ticks: { callback: v => fmtShort(v), font: { size: 9 } },
+                    max: Math.max(...entries.map(e => e[1])) * 1.2
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { font: { size: 11, weight: '600' } }
                 }
             }
         }
