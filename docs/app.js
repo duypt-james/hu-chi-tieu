@@ -608,9 +608,19 @@ function importData(input) {
 function saveGHSettings() {
     const token = document.getElementById('gh-token').value.trim();
     const gistId = document.getElementById('gh-gist').value.trim();
-    saveGHConfig({ token, gistId });
-    alert('Đã lưu cài đặt GitHub! Đang sync...');
+    saveGHConfig({ token, gistId, sha: '' });
+    alert('Đã lưu! Đang thử sync...');
     pullFromGist();
+}
+
+function resetGHSettings() {
+    if (!confirm('Xóa Token + Gist ID?')) return;
+    localStorage.removeItem(GH_TOKEN_KEY);
+    localStorage.removeItem(GH_GIST_KEY);
+    localStorage.removeItem(GH_SHA_KEY);
+    renderSidebar();
+    setSyncStatus('Đã xóa cài đặt', '#f57c00');
+    setTimeout(() => setSyncStatus(''), 2000);
 }
 
 // ============================================================
@@ -893,8 +903,10 @@ function renderSidebar() {
         <div class="sidebar-section">
             <h4>⚙️ GitHub Sync</h4>
             <div class="form-group"><label>Token</label><input type="password" id="gh-token" value="${cfg.token}" placeholder="ghp_xxx..."></div>
-            <div class="form-group"><label>Gist ID</label><input type="text" id="gh-gist" value="${cfg.gistId}" placeholder="c6c9f183..."></div>
-            <button class="btn btn-primary" style="width:100%" onclick="saveGHSettings()">💾 Lưu cài đặt</button>
+            <div class="form-group"><label>Gist ID</label><input type="text" id="gh-gist" value="${cfg.gistId}" placeholder="c6c9f18338db505866b0fc1d5d1201a8"></div>
+            <div style="font-size:10px;color:var(--text2);margin-bottom:8px">Gist ID hiện tại: <b>${cfg.gistId || 'chưa có'}</b></div>
+            <button class="btn btn-primary" style="width:100%;margin-bottom:6px" onclick="saveGHSettings()">💾 Lưu & Thử lại</button>
+            <button class="btn btn-red" style="width:100%" onclick="resetGHSettings()">🗑️ Xóa cài đặt</button>
             <div style="font-size:10px;color:var(--text2);margin-top:4px">Tạo PAT tại <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a> với quyền <b>gist</b></div>
         </div>
     `;
