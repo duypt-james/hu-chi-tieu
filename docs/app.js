@@ -438,7 +438,7 @@ function renderIncomeList(md, personal) {
                 <input type="text" value="${mb}" style="border:none;font-weight:600;font-size:13px;width:80px" onchange="renameMember(${i}, this.value)">
                 <div class="item-sub">💸 Chi phí cá nhân: ${fmt(pe)}</div>
             </div>
-            <input type="text" value="${fmt(inc)}" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;text-align:right;font-size:13px;width:120px;font-weight:600" onchange="updateIncome('${mb}', this.value)">
+            <input type="text" value="${inc === 0 ? '' : fmt(inc)}" placeholder="0" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;text-align:right;font-size:13px;width:120px;font-weight:600" oninput="updateIncome('${mb}', this.value)">
         </div>`;
     }).join('');
     initDragDrop(el, 'member');
@@ -478,7 +478,7 @@ function renderExpenseList(md, personal) {
         return `<div class="item-row" draggable="true" data-type="category" data-index="${i}">
             <span class="drag-handle">☰</span>
             <input type="text" value="${cat}" style="border:none;font-weight:600;font-size:13px;flex:1" onchange="renameCategory(${i}, this.value)">
-            <input type="text" value="${fmt(val)}" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;text-align:right;font-size:13px;width:120px;font-weight:600" onchange="updateExpense('${cat}', this.value)">
+            <input type="text" value="${val === 0 ? '' : fmt(val)}" placeholder="0" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;text-align:right;font-size:13px;width:120px;font-weight:600" oninput="updateExpense('${cat}', this.value)">
         </div>`;
     }).join('');
     initDragDrop(el, 'category');
@@ -491,6 +491,11 @@ function renderExpenseCards(totals, prev, md) {
         <div class="summary-card card-gray"><div class="s-label">Tổng chi tiêu</div><div class="s-value">${fmt(totals.total)}</div><div class="s-sub">${fmtDelta(totals.total - prev.total)}</div></div>
         <div class="summary-card ${totals.bal >= 0 ? 'card-green' : 'card-red'}"><div class="s-label">Còn lại</div><div class="s-value">${fmt(totals.bal)}</div></div>
     `;
+}
+
+function renderChartsLightweight() {
+    const md = _data.months[_selected] || newMonth();
+    renderAllCharts(md);
 }
 
 function renderSavingCards(totals, prev) {
@@ -560,7 +565,15 @@ function renameMember(i, newName) {
 function updateIncome(member, rawVal) {
     const md = _data.months[_selected];
     md.income[member] = parseMoney(rawVal);
-    setDirty(); renderAll();
+    const totals = calcMonthTotal(md);
+    const personal = calcPersonal(md);
+    const prevMd = _data.months[prevMonthKey(_selected)];
+    const prevTotals = prevMd ? calcMonthTotal(prevMd) : { inc: 0, total: 0, bal: 0 };
+    renderIncomeCards(totals, prevTotals);
+    renderSavingCards(totals, prevTotals);
+    renderPersonalList(md, personal);
+    renderChartsLightweight();
+    setDirty();
 }
 
 function addExtra() {
@@ -593,7 +606,14 @@ function renameCategory(i, newName) {
 function updateExpense(cat, rawVal) {
     const md = _data.months[_selected];
     md.expenses[cat] = parseMoney(rawVal);
-    setDirty(); renderAll();
+    const totals = calcMonthTotal(md);
+    const personal = calcPersonal(md);
+    const prevMd = _data.months[prevMonthKey(_selected)];
+    const prevTotals = prevMd ? calcMonthTotal(prevMd) : { inc: 0, total: 0, bal: 0 };
+    renderExpenseCards(totals, prevTotals, md);
+    renderHistoryTable();
+    renderChartsLightweight();
+    setDirty();
 }
 
 function addCategory() {
