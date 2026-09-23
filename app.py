@@ -29,6 +29,7 @@ st.markdown("""
     .card-red { background: linear-gradient(135deg, #fce4ec, #f8bbd0); border-left: 4px solid #f45c43; }
     .card-purple { background: linear-gradient(135deg, #ede7f6, #d1c4e9); border-left: 4px solid #667eea; }
     .card-gray { background: linear-gradient(135deg, #f5f7fa, #c3cfe2); border-left: 4px solid #90a4ae; }
+    .card-orange { background: linear-gradient(135deg, #fff3e0, #ffe0b2); border-left: 4px solid #ff9800; }
     .summary-card .label { font-size: 11px; color: #666; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
     .summary-card .value { font-size: 20px; font-weight: 700; color: #1a1a2e; }
     .summary-card .sub { font-size: 11px; color: #888; margin-top: 2px; }
@@ -44,6 +45,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
 GIST_FILENAME = "hu_chitieu_data.json"
+PERSONAL_EXPENSE_RATE = 0.15
 
 DEFAULT_DATA = {
     "members": ["Duy", "Hà"],
@@ -98,14 +100,25 @@ def new_month(copy_from=None):
         "income": {m: 0 for m in DEFAULT_DATA["members"]},
         "extra_income": {},
         "expenses": {c: 0 for c in DEFAULT_DATA["categories"]},
+        "personal_expenses": {},
         "notes": ""
     }
 
 
+def calc_personal_expenses(md):
+    """Tính chi phí cá nhân = 15% thu nhập mỗi người"""
+    result = {}
+    for member, income in md.get("income", {}).items():
+        result[member] = int(income * PERSONAL_EXPENSE_RATE)
+    return result
+
+
 def calc_month_total(m):
     inc = sum(m["income"].values()) + sum(m.get("extra_income", {}).values())
-    exp = sum(m["expenses"].values())
-    return inc, exp, inc - exp
+    personal = sum(calc_personal_expenses(m).values())
+    shared_exp = sum(m["expenses"].values())
+    total_exp = personal + shared_exp
+    return inc, total_exp, inc - total_exp
 
 
 def get_gist_config():
@@ -115,7 +128,6 @@ def get_gist_config():
 
 
 def _ensure_valid(data):
-    """Đảm bảo data luôn có cấu trúc hợp lệ"""
     if not isinstance(data, dict):
         data = {}
     if "months" not in data or not isinstance(data.get("months"), dict):
@@ -135,7 +147,6 @@ def _ensure_valid(data):
 def load_data():
     token, gist_id = get_gist_config()
 
-    # Try loading from Gist
     if token and gist_id:
         try:
             headers = {"Authorization": f"token {token}"}
@@ -145,14 +156,13 @@ def load_data():
                 if GIST_FILENAME in gist.get("files", {}):
                     content = gist["files"][GIST_FILENAME]["content"]
                     d = json.loads(content)
-                    if d:  # Gist có data
+                    if d:
                         return _ensure_valid(d)
             else:
                 st.warning(f"Gist API lỗi {resp.status_code}")
         except Exception as e:
             st.warning(f"Không đọc được Gist: {e}")
 
-    # Fallback: local file
     path = "family_data.json"
     if os.path.exists(path):
         try:
@@ -163,18 +173,15 @@ def load_data():
         except Exception:
             pass
 
-    # Mặc định: tạo data mới với tháng hiện tại
     data = dict(DEFAULT_DATA)
     data["months"] = {datetime.today().strftime("%Y-%m"): new_month()}
     return data
 
 
-def save(data, show_status=False):
+def save(data):
     token, gist_id = get_gist_config()
     content = json.dumps(data, ensure_ascii=False, indent=2)
-    saved_to = None
 
-    # Save to Gist
     if token and gist_id:
         try:
             headers = {"Authorization": f"token {token}", "Content-Type": "application/json"}
@@ -182,34 +189,49 @@ def save(data, show_status=False):
             resp = requests.patch(f"https://api.github.com/gists/{gist_id}",
                                   headers=headers, json=payload, timeout=10)
             if resp.status_code == 200:
-                saved_to = "cloud"
-                if show_status:
-                    st.success("Đã lưu lên GitHub Gist!")
                 return True
-            else:
-                if show_status:
-                    st.error(f"Gist API lỗi {resp.status_code}: {resp.text[:200]}")
-        except Exception as e:
-            if show_status:
-                st.error(f"Lỗi kết nối Gist: {e}")
+        except Exception:
+            pass
 
-    # Fallback: local file
     try:
         with open("family_data.json", "w", encoding="utf-8") as f:
             f.write(content)
-        saved_to = "local"
-        if show_status:
-            st.warning("Gist thất bại → Đã lưu vào file local")
         return True
-    except Exception as e:
-        if show_status:
-            st.error(f"Lỗi lưu local: {e}")
+    except Exception:
         return False
 
 
+# ============================================================
+#  AUTO-SAVE — tự động lưu khi thay đổi dữ liệu
+# ============================================================
 if "data" not in st.session_state:
     st.session_state.data = load_data()
+if "_dirty" not in st.session_state:
+    st.session_state._dirty = False
+
+
+def _set_dirty():
+    st.session_state._dirty = True
+
+
 data = st.session_state.data
+
+
+def parse_money(text):
+    clean = text.replace(".", "").replace(",", "").strip()
+    if not clean:
+        return 0
+    try:
+        return int(clean)
+    except ValueError:
+        return 0
+
+
+def fmt_input(v):
+    if v == 0:
+        return ""
+    return f"{v:,}".replace(",", ".")
+
 
 # ============================================================
 #  SIDEBAR
@@ -241,7 +263,7 @@ with st.sidebar:
     all_months = sorted(data["months"].keys(), reverse=True)
     selected = st.selectbox("Tháng", all_months,
                             format_func=month_label, label_visibility="collapsed",
-                            key="month_select")
+                            key="month_select", on_change=_set_dirty)
 
     with st.expander("➕ Thêm tháng mới"):
         new_y = st.number_input("Năm", value=date.today().year,
@@ -291,13 +313,16 @@ with st.sidebar:
         st.caption("☁️ Đang dùng GitHub Gist")
     else:
         st.caption("💾 Đang dùng file local")
-    st.caption("Hũ Chi Tiêu v1.0")
+    st.caption("Hũ Chi Tiêu v1.1")
 
 # ============================================================
 #  HEADER
 # ============================================================
 md = data["months"].setdefault(selected, new_month())
 total_inc, total_exp, balance = calc_month_total(md)
+personal_exp = calc_personal_expenses(md)
+shared_exp_total = sum(md["expenses"].values())
+personal_total = sum(personal_exp.values())
 
 prev_mk = prev_month_key(selected)
 prev_data = data["months"].get(prev_mk)
@@ -331,34 +356,14 @@ st.markdown(f"""
 # ============================================================
 tab_inc, tab_exp, tab_bal = st.tabs(["💵 Thu nhập", "🛒 Chi phí", "💰 Tiết kiệm"])
 
-def parse_money(text):
-    """Parse '35.000.000' or '35000000' -> 35000000"""
-    clean = text.replace(".", "").replace(",", "").strip()
-    if not clean:
-        return 0
-    try:
-        return int(clean)
-    except ValueError:
-        return 0
-
-
-def fmt_input(v):
-    """Format 35000000 -> '35.000.000'"""
-    if v == 0:
-        return ""
-    return f"{v:,}".replace(",", ".")
-
-
 # ============================================================
 #  TAB 1 — THU NHẬP
 # ============================================================
 with tab_inc:
     st.subheader("💵 Thu nhập")
 
-    # Tính lại tổng realtime
     now_inc = sum(md["income"].values()) + sum(md.get("extra_income", {}).values())
 
-    # 3 ô tổng quan — full width
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown(f"""<div class="summary-card card-green">
@@ -367,7 +372,7 @@ with tab_inc:
             <div class="sub">{fmt_delta(now_inc - prev_inc)} so tháng trước</div>
         </div>""", unsafe_allow_html=True)
     with c2:
-        st.markdown(f"""<div class="summary-card card-gray">
+        st.markdown(f"""<div class="summary-card card-red">
             <div class="label">Chi tiêu</div>
             <div class="value">{fmt(total_exp)}</div>
         </div>""", unsafe_allow_html=True)
@@ -381,17 +386,16 @@ with tab_inc:
 
     st.divider()
 
-    # 2 cột: trái = nhập liệu, phải = biểu đồ
     col_input, col_chart = st.columns([3, 2])
 
     with col_input:
-        # --- Thu nhập cố định ---
         st.markdown("**Thu nhập cố định**")
         for i, member in enumerate(data["members"]):
             c_name, c_val = st.columns([2, 3])
             with c_name:
                 new_name = st.text_input("Tên", value=member, key=f"member_name_{i}_{selected}",
-                                         label_visibility="collapsed", placeholder="Tên")
+                                         label_visibility="collapsed", placeholder="Tên",
+                                         on_change=_set_dirty)
                 if new_name and new_name != member:
                     old_val = md["income"].pop(member, 0)
                     md["income"][new_name] = old_val
@@ -404,10 +408,13 @@ with tab_inc:
                     value=fmt_input(current_val),
                     key=f"inc_{member}_{selected}",
                     label_visibility="collapsed",
-                    placeholder="0")
+                    placeholder="0",
+                    on_change=_set_dirty)
                 md["income"][current_member] = parse_money(raw)
 
-        # --- Thu nhập phát sinh ---
+            pe = int(md["income"].get(current_member, 0) * PERSONAL_EXPENSE_RATE)
+            st.caption(f"   💸 Chi phí cá nhân (15%): {fmt(pe)}")
+
         st.divider()
         st.markdown("**Thu nhập phát sinh**")
         extra = md.get("extra_income", {})
@@ -419,6 +426,7 @@ with tab_inc:
                 ex_amt = parse_money(ex_raw)
                 if ex_name and ex_amt > 0:
                     md.setdefault("extra_income", {})[ex_name] = ex_amt
+                    save(data)
                     st.rerun()
 
         if extra:
@@ -428,17 +436,11 @@ with tab_inc:
                 c2.write(f"**{fmt(amt)}**")
                 if c3.button("🗑️", key=f"del_ex_{name}_{selected}"):
                     del md["extra_income"][name]
+                    save(data)
                     st.rerun()
         else:
             st.caption("Chưa có thu nhập phát sinh")
 
-        st.divider()
-        # Nút lưu
-        if st.button("💾 Lưu lên cloud", type="primary", use_container_width=True,
-                     key="save_income"):
-            save(data, show_status=True)
-
-    # --- Biểu đồ bên phải ---
     with col_chart:
         inc_data = {k: v for k, v in md["income"].items() if v > 0}
         extra_data = {k: v for k, v in md.get("extra_income", {}).items() if v > 0}
@@ -468,25 +470,29 @@ with tab_inc:
 with tab_exp:
     st.subheader("🛒 Chi tiêu")
 
-    # Tính lại tổng realtime
     now_exp = sum(md["expenses"].values())
     now_inc = sum(md["income"].values()) + sum(md.get("extra_income", {}).values())
 
-    # 3 ô tổng quan — full width
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.markdown(f"""<div class="summary-card card-red">
-            <div class="label">Chi tiêu</div>
-            <div class="value">{fmt(now_exp)}</div>
-            <div class="sub">{fmt_delta(now_exp - prev_exp)} so tháng trước</div>
+        st.markdown(f"""<div class="summary-card card-orange">
+            <div class="label">Chi phí cá nhân</div>
+            <div class="value">{fmt(personal_total)}</div>
+            <div class="sub">15% thu nhập</div>
         </div>""", unsafe_allow_html=True)
     with c2:
-        st.markdown(f"""<div class="summary-card card-green">
-            <div class="label">Thu nhập</div>
-            <div class="value">{fmt(now_inc)}</div>
+        st.markdown(f"""<div class="summary-card card-red">
+            <div class="label">Chi phí chung</div>
+            <div class="value">{fmt(shared_exp_total)}</div>
         </div>""", unsafe_allow_html=True)
     with c3:
-        now_bal = now_inc - now_exp
+        st.markdown(f"""<div class="summary-card card-gray">
+            <div class="label">Tổng chi tiêu</div>
+            <div class="value">{fmt(total_exp)}</div>
+            <div class="sub">{fmt_delta(total_exp - prev_exp)} so tháng trước</div>
+        </div>""", unsafe_allow_html=True)
+    with c4:
+        now_bal = now_inc - total_exp
         st.markdown(f"""<div class="summary-card {'card-green' if now_bal >= 0 else 'card-red'}">
             <div class="label">Còn lại</div>
             <div class="value">{fmt(now_bal)}</div>
@@ -494,16 +500,27 @@ with tab_exp:
 
     st.divider()
 
-    # 2 cột: trái = nhập liệu, phải = biểu đồ
     col_input, col_chart = st.columns([3, 2])
 
     with col_input:
-        # Hiển thị danh mục hiện tại
+        st.markdown("**💸 Chi phí cá nhân (15% thu nhập)**")
+        for member in data["members"]:
+            income = md["income"].get(member, 0)
+            pe = int(income * PERSONAL_EXPENSE_RATE)
+            c1, c2 = st.columns([3, 2])
+            with c1:
+                st.write(f"**{member}** — Thu nhập: {fmt(income)}")
+            with c2:
+                st.metric("Chi phí", fmt(pe), f"15% × {fmt_short(income)}")
+
+        st.divider()
+        st.markdown("**🏠 Chi phí chung gia đình**")
         for i, cat in enumerate(data["categories"]):
             c_name, c_val = st.columns([2, 3])
             with c_name:
                 new_name = st.text_input("Tên", value=cat, key=f"cat_name_{i}_{selected}",
-                                         label_visibility="collapsed", placeholder="Tên danh mục")
+                                         label_visibility="collapsed", placeholder="Tên danh mục",
+                                         on_change=_set_dirty)
                 if new_name and new_name != cat:
                     old_val = md["expenses"].pop(cat, 0)
                     md["expenses"][new_name] = old_val
@@ -514,12 +531,12 @@ with tab_exp:
                     current_cat,
                     value=fmt_input(md["expenses"].get(current_cat, 0)),
                     key=f"exp_{cat}_{selected}",
-                    placeholder="0")
+                    placeholder="0",
+                    on_change=_set_dirty)
                 md["expenses"][current_cat] = parse_money(raw)
 
         st.divider()
 
-        # Thêm danh mục mới
         with st.form("add_category", clear_on_submit=True):
             new_cat_name = st.text_input("Danh mục mới", placeholder="VD: Giải trí, Du lịch...")
             if st.form_submit_button("➕ Thêm danh mục", use_container_width=True, type="primary"):
@@ -529,23 +546,27 @@ with tab_exp:
                     save(data)
                     st.rerun()
 
-        if st.button("💾 Lưu lên cloud", type="primary", use_container_width=True,
-                     key="save_expense"):
-            save(data, show_status=True)
-
     with col_chart:
-        exp_data = {k: v for k, v in md["expenses"].items() if v > 0}
-        if exp_data:
-            sorted_exp = dict(sorted(exp_data.items(), key=lambda x: x[1], reverse=True))
+        chart_data = {}
+        for member in data["members"]:
+            pe = int(md["income"].get(member, 0) * PERSONAL_EXPENSE_RATE)
+            if pe > 0:
+                chart_data[f"CP {member}"] = pe
+        for k, v in md["expenses"].items():
+            if v > 0:
+                chart_data[k] = v
 
-            # Biểu đồ cột ngang
+        if chart_data:
+            sorted_exp = dict(sorted(chart_data.items(), key=lambda x: x[1], reverse=True))
+
             fig, ax = plt.subplots(figsize=(5, 4), dpi=150)
-            colors = ["#f45c43", "#f093fb", "#667eea", "#4facfe", "#43e97b", "#fa709a"]
+            colors = ["#ff9800", "#ff5722", "#f45c43", "#f093fb", "#667eea", "#4facfe", "#43e97b", "#fa709a", "#00f2fe"]
             bars = ax.barh(list(sorted_exp.keys()), list(sorted_exp.values()),
                            color=colors[:len(sorted_exp)], alpha=0.85, edgecolor="white")
             max_val = max(sorted_exp.values()) if sorted_exp else 1
+            total_for_pct = total_exp if total_exp > 0 else 1
             for bar, val in zip(bars, sorted_exp.values()):
-                pct = val / now_exp * 100 if now_exp > 0 else 0
+                pct = val / total_for_pct * 100
                 ax.text(bar.get_width() + max_val * 0.01,
                         bar.get_y() + bar.get_height() / 2.,
                         f"{fmt_short(val)} ({pct:.0f}%)", ha="left", va="center", fontsize=9, fontweight="bold")
@@ -558,7 +579,6 @@ with tab_exp:
             st.pyplot(fig)
             plt.close(fig)
 
-            # Pie chart donut
             fig2, ax2 = plt.subplots(figsize=(4, 4), dpi=150)
             wedges, texts, autotexts = ax2.pie(
                 sorted_exp.values(), labels=None,
@@ -607,7 +627,8 @@ with tab_bal:
     with st.expander("📝 Ghi chú tháng này", expanded=False):
         notes = st.text_area("Ghi chú", value=md.get("notes", ""),
                              key=f"notes_{selected}", height=80,
-                             placeholder="Ghi chú chi tiêu tháng này...")
+                             placeholder="Ghi chú chi tiêu tháng này...",
+                             on_change=_set_dirty)
         if notes != md.get("notes", ""):
             md["notes"] = notes
             save(data)
@@ -658,16 +679,26 @@ with tab_bal:
         plt.close(fig)
 
         st.markdown("#### 📊 Chi tiêu theo nhóm")
-        cat_data = {c: [] for c in data["categories"]}
+        all_cats = list(data["categories"])
+        for mk in sorted_months:
+            for member in data["members"]:
+                lbl = f"CP {member}"
+                if lbl not in all_cats:
+                    all_cats.append(lbl)
+        cat_data = {c: [] for c in all_cats}
         for mk in sorted_months:
             m = data["months"][mk]
             for c in data["categories"]:
                 cat_data[c].append(m["expenses"].get(c, 0))
-        active_cats = [c for c in data["categories"] if any(v > 0 for v in cat_data[c])]
+            for member in data["members"]:
+                lbl = f"CP {member}"
+                pe = int(m["income"].get(member, 0) * PERSONAL_EXPENSE_RATE)
+                cat_data[lbl].append(pe)
+        active_cats = [c for c in all_cats if any(v > 0 for v in cat_data[c])]
         if active_cats:
             fig, ax = plt.subplots(figsize=(10, 4.5), dpi=150)
             x = range(len(labels))
-            colors = ["#667eea", "#764ba2", "#f093fb", "#f5576c", "#4facfe", "#00f2fe", "#43e97b", "#fa709a"]
+            colors = ["#ff9800", "#ff5722", "#667eea", "#764ba2", "#f093fb", "#f5576c", "#4facfe", "#00f2fe", "#43e97b", "#fa709a"]
             bottom = [0] * len(labels)
             for i, cat in enumerate(active_cats):
                 vals = cat_data[cat]
@@ -720,3 +751,10 @@ with tab_bal:
             "Ghi chú": notes_txt
         })
     st.dataframe(rows, use_container_width=True, hide_index=True)
+
+# ============================================================
+#  AUTO-SAVE at end of each rerun
+# ============================================================
+if st.session_state.get("_dirty", False):
+    st.session_state._dirty = False
+    save(data)
