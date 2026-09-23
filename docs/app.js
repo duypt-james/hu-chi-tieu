@@ -1083,25 +1083,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ============================================================
-//  COLLAPSIBLE SECTIONS
-// ============================================================
-function toggleSection(el, bodyId) {
-    const body = document.getElementById(bodyId);
-    if (!body) return;
-    el.classList.toggle('open');
-    if (body.classList.contains('collapsed')) {
-        body.classList.remove('collapsed');
-        body.style.maxHeight = body.scrollHeight + 'px';
-        setTimeout(() => { body.style.maxHeight = ''; }, 300);
-    } else {
-        body.style.maxHeight = body.scrollHeight + 'px';
-        requestAnimationFrame(() => {
-            body.classList.add('collapsed');
-        });
-    }
-}
-
-// ============================================================
 //  SWIPE TO CHANGE MONTH
 // ============================================================
 (function initSwipe() {
