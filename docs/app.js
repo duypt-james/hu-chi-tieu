@@ -311,6 +311,56 @@ function startAutoPull() {
 }
 
 // ============================================================
+//  DRAG & DROP — sắp xếp lại thứ tự
+// ============================================================
+function initDragDrop(container, type) {
+    let dragIdx = null;
+    container.querySelectorAll('.item-row[draggable]').forEach(row => {
+        row.addEventListener('dragstart', e => {
+            dragIdx = parseInt(row.dataset.index);
+            row.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        row.addEventListener('dragend', () => {
+            row.classList.remove('dragging');
+            container.querySelectorAll('.item-row').forEach(r => r.classList.remove('drag-over'));
+        });
+        row.addEventListener('dragover', e => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            container.querySelectorAll('.item-row').forEach(r => r.classList.remove('drag-over'));
+            row.classList.add('drag-over');
+        });
+        row.addEventListener('drop', e => {
+            e.preventDefault();
+            const dropIdx = parseInt(row.dataset.index);
+            if (dragIdx === null || dragIdx === dropIdx) return;
+            reorderItems(type, dragIdx, dropIdx);
+        });
+    });
+}
+
+function reorderItems(type, fromIdx, toIdx) {
+    if (type === 'member') {
+        const item = _data.members.splice(fromIdx, 1)[0];
+        _data.members.splice(toIdx, 0, item);
+    } else if (type === 'category') {
+        const item = _data.categories.splice(fromIdx, 1)[0];
+        _data.categories.splice(toIdx, 0, item);
+    } else if (type === 'extra') {
+        const md = _data.months[_selected];
+        const keys = Object.keys(md.extra_income);
+        const item = keys.splice(fromIdx, 1)[0];
+        keys.splice(toIdx, 0, item);
+        const sorted = {};
+        keys.forEach(k => sorted[k] = md.extra_income[k]);
+        md.extra_income = sorted;
+    }
+    setDirty();
+    renderAll();
+}
+
+// ============================================================
 //  RENDER
 // ============================================================
 function renderAll() {
@@ -382,7 +432,8 @@ function renderIncomeList(md, personal) {
     el.innerHTML = _data.members.map((mb, i) => {
         const inc = md.income[mb] || 0;
         const pe = personal[mb] || 0;
-        return `<div class="item-row">
+        return `<div class="item-row" draggable="true" data-type="member" data-index="${i}">
+            <span class="drag-handle">☰</span>
             <div style="flex:1">
                 <input type="text" value="${mb}" style="border:none;font-weight:600;font-size:13px;width:80px" onchange="renameMember(${i}, this.value)">
                 <div class="item-sub">💸 Chi phí cá nhân: ${fmt(pe)}</div>
@@ -390,6 +441,7 @@ function renderIncomeList(md, personal) {
             <input type="text" value="${fmt(inc)}" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;text-align:right;font-size:13px;width:120px;font-weight:600" onchange="updateIncome('${mb}', this.value)">
         </div>`;
     }).join('');
+    initDragDrop(el, 'member');
 }
 
 function renderExtraList(md) {
@@ -397,11 +449,13 @@ function renderExtraList(md) {
     const extra = md.extra_income || {};
     const entries = Object.entries(extra);
     if (!entries.length) { el.innerHTML = '<div class="empty">Chưa có thu nhập phát sinh</div>'; return; }
-    el.innerHTML = entries.map(([name, amt]) => `<div class="item-row">
+    el.innerHTML = entries.map(([name, amt], i) => `<div class="item-row" draggable="true" data-type="extra" data-index="${i}" data-name="${name}">
+        <span class="drag-handle">☰</span>
         <div class="item-name">📌 ${name}</div>
         <div class="item-value">${fmt(amt)}</div>
         <div class="item-actions"><button class="btn-del" onclick="deleteExtra('${name}')">🗑️</button></div>
     </div>`).join('');
+    initDragDrop(el, 'extra');
 }
 
 function renderPersonalList(md, personal) {
@@ -421,11 +475,13 @@ function renderExpenseList(md, personal) {
     const el = document.getElementById('expense-list');
     el.innerHTML = _data.categories.map((cat, i) => {
         const val = md.expenses[cat] || 0;
-        return `<div class="item-row">
+        return `<div class="item-row" draggable="true" data-type="category" data-index="${i}">
+            <span class="drag-handle">☰</span>
             <input type="text" value="${cat}" style="border:none;font-weight:600;font-size:13px;flex:1" onchange="renameCategory(${i}, this.value)">
             <input type="text" value="${fmt(val)}" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;text-align:right;font-size:13px;width:120px;font-weight:600" onchange="updateExpense('${cat}', this.value)">
         </div>`;
     }).join('');
+    initDragDrop(el, 'category');
 }
 
 function renderExpenseCards(totals, prev, md) {

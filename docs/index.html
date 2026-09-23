@@ -111,6 +111,10 @@
             .metric-value { font-size: 20px; }
             .chart-wrap { height: 320px; }
         }
+        .drag-handle { cursor: grab; color: #bbb; font-size: 14px; padding: 4px 6px; user-select: none; flex-shrink: 0; }
+        .drag-handle:active { cursor: grabbing; }
+        .item-row.dragging { opacity: 0.4; background: #e3f2fd; }
+        .item-row.drag-over { border-top: 2px solid var(--primary); }
     </style>
 </head>
 <body>
@@ -259,6 +263,6 @@
         caches.keys().then(n => n.forEach(k => caches.delete(k)));
     }
     </script>
-    <script src="app.js"></script>
+    <script src="app.js?v=4"></script>
 </body>
 </html>
