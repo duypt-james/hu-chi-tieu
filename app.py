@@ -15,6 +15,9 @@ st.markdown(f"""
 <meta name="theme-color" content="#667eea">
 <link rel="apple-touch-icon" href="{ICON_URL}">
 <link rel="icon" type="image/png" href="{ICON_URL}">
+""", unsafe_allow_html=True)
+
+st.markdown("""
 <style>
     @media (max-width: 768px) {
         .block-container { padding: 1rem 0.5rem !important; }
