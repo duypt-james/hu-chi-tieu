@@ -4,9 +4,9 @@ import os
 import requests
 from datetime import datetime, date
 
-st.set_page_config(page_title="Hũ Chi Tiêu", page_icon="💰", layout="wide")
-
 ICON_URL = "https://raw.githubusercontent.com/duypt-james/hu-chi-tieu/master/icon.png"
+
+st.set_page_config(page_title="Hũ Chi Tiêu", page_icon=ICON_URL, layout="wide")
 
 st.markdown(f"""
 <meta name="apple-mobile-web-app-capable" content="yes">
