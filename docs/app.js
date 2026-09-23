@@ -161,10 +161,11 @@ function showSyncOk() {
     setTimeout(() => setSyncStatus(''), 3000);
 }
 
-function showSyncFail() {
+function showSyncFail(msg) {
     _lastSyncOk = false;
-    setSyncStatus('❌ Lỗi sync (data vẫn lưu local)', 'var(--red)');
-    setTimeout(() => setSyncStatus(''), 4000);
+    const detail = msg ? `: ${msg}` : '';
+    setSyncStatus(`❌ Lỗi sync${detail}`, 'var(--red)');
+    setTimeout(() => setSyncStatus(''), 6000);
 }
 
 async function doSaveAndSync() {
@@ -201,7 +202,7 @@ async function fetchFromGist() {
 
 async function pushToGist(data) {
     const cfg = getGHConfig();
-    if (!cfg.token || !cfg.gistId) return false;
+    if (!cfg.token || !cfg.gistId) { showSyncFail('Chưa nhập Token/Gist ID'); return false; }
     if (_syncing) return false;
     _syncing = true;
     try {
@@ -239,13 +240,20 @@ async function pushToGist(data) {
                     showSyncOk();
                     return true;
                 }
+                const retryErr = await retryRes.text();
+                showSyncFail(`Retry fail: ${retryRes.status} ${retryErr.substring(0, 80)}`);
+            } else if (res.status === 401) {
+                showSyncFail('Token sai hoặc hết hạn');
+            } else if (res.status === 404) {
+                showSyncFail('Gist ID không tồn tại');
+            } else {
+                showSyncFail(`HTTP ${res.status}`);
             }
-            showSyncFail();
             return false;
         }
     } catch (e) {
         console.error('Gist push error:', e);
-        showSyncFail();
+        showSyncFail(e.message || 'Network error');
         return false;
     } finally {
         _syncing = false;
@@ -896,6 +904,12 @@ function renderSidebar() {
 //  INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
+    const cfg = getGHConfig();
+    if (!cfg.token || !cfg.gistId) {
+        setSyncStatus('⚠️ Chưa cấu hình Gist', '#f57c00');
+        renderAll();
+        return;
+    }
     setSyncStatus('🔄 Đang sync...', '#f57c00');
     const d = await fetchFromGist();
     if (d && d.months) {
