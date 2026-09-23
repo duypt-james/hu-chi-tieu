@@ -208,6 +208,7 @@ function renderAll() {
     const prevMd = _data.months[prevMk];
     const prevTotals = prevMd ? calcMonthTotal(prevMd) : { inc: 0, total: 0, bal: 0 };
 
+    renderMonthSelector();
     renderIncomeCards(totals, prevTotals);
     renderIncomeList(md, personal);
     renderExtraList(md);
@@ -219,6 +220,36 @@ function renderAll() {
     renderNotes(md);
     renderSidebar();
     renderAllCharts(md);
+}
+
+function renderMonthSelector() {
+    const sel = document.getElementById('month-select-main');
+    if (!sel) return;
+    const sorted = Object.keys(_data.months).sort().reverse();
+    sel.innerHTML = sorted.map(mk => `<option value="${mk}" ${mk === _selected ? 'selected' : ''}>${monthLabel(mk)}</option>`).join('');
+}
+
+function promptAddMonth() {
+    const now = new Date();
+    const input = prompt('Nhập tháng (MM/YYYY):', `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`);
+    if (!input) return;
+    const parts = input.split('/');
+    if (parts.length !== 2) { alert('Sai định dạng! Dùng MM/YYYY'); return; }
+    const m = parseInt(parts[0]);
+    const y = parseInt(parts[1]);
+    if (isNaN(m) || isNaN(y) || m < 1 || m > 12) { alert('Tháng không hợp lệ!'); return; }
+    const mk = `${y}-${String(m).padStart(2, '0')}`;
+    if (_data.months[mk]) { alert('Tháng đã tồn tại!'); return; }
+    const copyPrev = confirm('Copy dữ liệu tháng trước?');
+    if (copyPrev) {
+        const prev = prevMonthKey(mk);
+        _data.months[mk] = _data.months[prev] ? newMonth(_data.months[prev]) : newMonth();
+    } else {
+        _data.months[mk] = newMonth();
+    }
+    _selected = mk;
+    saveData(_data);
+    renderAll();
 }
 
 function renderIncomeCards(totals, prev) {
@@ -413,6 +444,8 @@ function parseMoney(s) {
 
 function selectMonth(mk) {
     _selected = mk;
+    const sel = document.getElementById('month-select-main');
+    if (sel) sel.value = mk;
     renderAll();
 }
 

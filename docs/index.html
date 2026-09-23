@@ -136,6 +136,15 @@
             <div class="tab" data-tab="saving" onclick="switchTab('saving')">💰 Tiết kiệm</div>
         </div>
 
+        <div style="display:flex;gap:12px;margin-bottom:12px;align-items:center">
+            <div style="flex:0 0 auto">
+                <select id="month-select-main" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-weight:600;min-width:140px" onchange="selectMonth(this.value)"></select>
+            </div>
+            <div style="flex:0 0 auto">
+                <button class="btn btn-green" onclick="promptAddMonth()" style="font-size:12px">➕ Tháng mới</button>
+            </div>
+        </div>
+
         <!-- TAB: THU NHẬP -->
         <div id="tab-income" class="tab-content active">
             <div class="summary-cards" id="income-cards"></div>
