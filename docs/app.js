@@ -14,7 +14,7 @@ const GH_SHA_KEY = 'hu_gh_sha';
 
 const DEFAULT_DATA = {
     members: ['Duy', 'Hà'],
-    categories: ['Cơm nước', 'DV chung cư', 'Điện nước', 'Giáo dục + y tế', 'Bỉm sửa + bánh kẹo', 'Khác'],
+    categories: ['Sinh hoạt', 'DV chung cư + nước sinh hoạt', 'Điện sinh hoạt', 'Giáo dục', 'Y tế', 'Bỉm sữa + bánh kẹo', 'Khác'],
     months: {}
 };
 
@@ -421,8 +421,6 @@ function promptAddMonth() {
 function renderIncomeCards(totals, prev) {
     document.getElementById('income-cards').innerHTML = `
         <div class="summary-card card-green"><div class="s-label">Thu nhập</div><div class="s-value">${fmt(totals.inc)}</div><div class="s-sub">${fmtDelta(totals.inc - prev.inc)}</div></div>
-        <div class="summary-card card-red"><div class="s-label">Chi tiêu</div><div class="s-value">${fmt(totals.total)}</div></div>
-        <div class="summary-card ${totals.bal >= 0 ? 'card-green' : 'card-red'}"><div class="s-label">Tiết kiệm</div><div class="s-value">${fmt(totals.bal)}</div><div class="s-sub">${fmtDelta(totals.bal - prev.bal)}</div></div>
     `;
 }
 
@@ -493,7 +491,7 @@ function renderExpenseCards(totals, prev, md) {
         <div class="summary-card card-orange"><div class="s-label">Chi phí cá nhân</div><div class="s-value">${fmt(totals.personal)}</div><div class="s-sub">15% thu nhập</div></div>
         <div class="summary-card card-red"><div class="s-label">Chi phí chung</div><div class="s-value">${fmt(totals.shared)}</div></div>
         <div class="summary-card card-gray"><div class="s-label">Tổng chi tiêu</div><div class="s-value">${fmt(totals.total)}</div><div class="s-sub">${fmtDelta(totals.total - prev.total)}</div></div>
-        <div class="summary-card ${totals.bal >= 0 ? 'card-green' : 'card-red'}"><div class="s-label">Còn lại</div><div class="s-value">${fmt(totals.bal)}</div></div>
+
     `;
 }
 
