@@ -870,7 +870,7 @@ function renderPieChart(md) {
                     font: { size: 9, weight: '600' },
                     formatter: (v, ctx) => {
                         const pct = (v / total * 100).toFixed(0);
-                        return pct > 4 ? `${pct}%` : '';
+                        return pct >= 1 ? `${pct}%` : '';
                     }
                 }
             }
