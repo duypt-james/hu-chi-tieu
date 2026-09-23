@@ -626,7 +626,7 @@ with tab_inc:
         extra_data = {k: v for k, v in md.get("extra_income", {}).items() if v > 0}
         all_inc = {**inc_data, **extra_data}
         if all_inc:
-            fig, ax = plt.subplots(figsize=(6, 3.5), dpi=250)
+            fig, ax = plt.subplots(figsize=(5, 3), dpi=250)
             colors = ["#38ef7d", "#43e97b", "#00f2fe", "#667eea", "#764ba2"]
             bars = ax.bar(list(all_inc.keys()), list(all_inc.values()),
                           color=colors[:len(all_inc)], alpha=0.85, edgecolor="white")
@@ -739,7 +739,7 @@ with tab_exp:
         if chart_data:
             sorted_exp = dict(sorted(chart_data.items(), key=lambda x: x[1], reverse=True))
 
-            fig, ax = plt.subplots(figsize=(6, 3.5), dpi=250)
+            fig, ax = plt.subplots(figsize=(5, 3), dpi=250)
             colors = ["#ff9800", "#ff5722", "#f45c43", "#f093fb", "#667eea", "#4facfe", "#43e97b", "#fa709a", "#00f2fe"]
             bars = ax.barh(list(sorted_exp.keys()), list(sorted_exp.values()),
                            color=colors[:len(sorted_exp)], alpha=0.85, edgecolor="white")
@@ -759,7 +759,7 @@ with tab_exp:
             st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
-            fig2, ax2 = plt.subplots(figsize=(4.5, 4.5), dpi=250)
+            fig2, ax2 = plt.subplots(figsize=(4, 4), dpi=250)
             wedges, texts, autotexts = ax2.pie(
                 sorted_exp.values(), labels=None,
                 autopct=lambda p: f"{p:.1f}%" if p > 4 else "",
@@ -826,7 +826,7 @@ with tab_bal:
     st.divider()
     if len(sorted_months) >= 2:
         st.markdown("#### 📈 Xu hướng")
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4), dpi=250)
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 3.5), dpi=250)
 
         x = range(len(labels))
         w = 0.25
@@ -876,7 +876,7 @@ with tab_bal:
                 cat_data[lbl].append(pe)
         active_cats = [c for c in all_cats if any(v > 0 for v in cat_data[c])]
         if active_cats:
-            fig, ax = plt.subplots(figsize=(8, 4), dpi=250)
+            fig, ax = plt.subplots(figsize=(7, 3.5), dpi=250)
             x = range(len(labels))
             colors = ["#ff9800", "#ff5722", "#667eea", "#764ba2", "#f093fb", "#f5576c", "#4facfe", "#00f2fe", "#43e97b", "#fa709a"]
             bottom = [0] * len(labels)
@@ -896,14 +896,14 @@ with tab_bal:
             plt.close(fig)
     else:
         if total_inc > 0:
-            fig, ax = plt.subplots(figsize=(5, 4), dpi=250)
+            fig, ax = plt.subplots(figsize=(4.5, 3.5), dpi=250)
             sizes = [total_exp, max(balance, 0)] if balance > 0 else [total_exp]
             labels_pie = ["Chi tiêu", "Tiết kiệm"] if balance > 0 else ["Chi tiêu"]
             colors_pie = ["#f45c43", "#38ef7d"] if balance > 0 else ["#f45c43"]
             ax.pie(sizes, labels=labels_pie, colors=colors_pie,
                    autopct=lambda p: fmt_short(p / 100 * total_inc),
-                   startangle=90, textprops={"fontsize": 9, "fontweight": "bold"})
-            ax.set_title("Chi tiêu vs Tiết kiệm", fontsize=11, fontweight="bold")
+                   startangle=90, textprops={"fontsize": 8, "fontweight": "bold"})
+            ax.set_title("Chi tiêu vs Tiết kiệm", fontsize=10, fontweight="bold")
             fig.tight_layout()
             st.pyplot(fig, use_container_width=True)
             plt.close(fig)
@@ -930,7 +930,29 @@ with tab_bal:
             "Lũy kế": fmt(cum),
             "Ghi chú": notes_txt
         })
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+    col_table, col_chart = st.columns([3, 2])
+    with col_table:
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+    with col_chart:
+        if len(sorted_months) >= 1:
+            fig, ax = plt.subplots(figsize=(5, 3.5), dpi=250)
+            colors_bar = ["#38ef7d" if b >= 0 else "#f45c43" for b in bal_list]
+            bars = ax.bar(labels, bal_list, color=colors_bar, alpha=0.85, edgecolor="white", width=0.6)
+            for bar, val in zip(bars, bal_list):
+                ax.text(bar.get_x() + bar.get_width() / 2., bar.get_height(),
+                        fmt_short(val), ha="center", va="bottom" if val >= 0 else "top",
+                        fontsize=7, fontweight="bold")
+            ax.axhline(y=0, color="#999", linewidth=0.8, linestyle="--")
+            ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
+            ax.set_title("Dư theo tháng", fontsize=10, fontweight="bold")
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            ax.grid(axis="y", alpha=0.3)
+            ax.tick_params(axis="x", rotation=45, labelsize=8)
+            fig.tight_layout()
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
 
 # ============================================================
 #  AUTO-SAVE at end of each rerun
