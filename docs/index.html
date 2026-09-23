@@ -91,30 +91,63 @@
         .sync-err { background: #fce4ec; color: #ea4335; }
         .sync-warn { background: #fff3e0; color: #f57c00; }
         .divider { height: 1px; background: var(--border); margin: 12px 0; }
+        .section-toggle { display:flex; align-items:center; justify-content:space-between; cursor:pointer; padding:10px 0; user-select:none; -webkit-tap-highlight-color:transparent; }
+        .section-toggle .s-label { font-size:15px; font-weight:700; color:var(--primary); }
+        .section-toggle .s-icon { font-size:12px; color:var(--text2); transition:transform .2s; }
+        .section-toggle.open .s-icon { transform:rotate(180deg); }
+        .section-body { overflow:hidden; transition:max-height .3s ease; }
+        .section-body.collapsed { max-height:0 !important; }
+        .swipe-hint { text-align:center; padding:8px; color:var(--text2); font-size:11px; }
+        .month-row { display:flex; gap:8px; margin-bottom:10px; align-items:stretch; }
+        .month-nav { display:flex; align-items:center; gap:4px; flex:1; min-width:0; }
+        .month-nav select { flex:1; min-width:0; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-weight:600; }
+        .month-nav .btn { flex-shrink:0; min-width:44px; min-height:36px; }
+        .drag-handle { cursor:grab; color:#bbb; font-size:14px; padding:4px 6px; user-select:none; flex-shrink:0; }
+        .drag-handle:active { cursor:grabbing; }
+        .item-row.dragging { opacity:0.4; background:#e3f2fd; }
+        .item-row.drag-over { border-top:2px solid var(--primary); }
+
+        @media (max-width: 480px) {
+            .header { padding:10px 12px; gap:8px; }
+            .header h1 { font-size:15px; }
+            .header-actions { gap:4px; }
+            .header-actions button, .header-actions label { padding:8px 10px; min-height:36px; font-size:13px; display:flex; align-items:center; }
+            .container { padding:6px; }
+            .tabs { top:46px; gap:0; }
+            .tab { padding:10px 4px; font-size:12px; min-height:40px; display:flex; align-items:center; justify-content:center; }
+            .month-row { flex-direction:column; gap:8px; }
+            .month-nav { width:100%; }
+            .month-nav select { padding:10px; font-size:14px; }
+            .month-nav .btn { width:100%; min-height:44px; font-size:14px; }
+            .summary-cards { grid-template-columns:1fr; gap:8px; }
+            .summary-card .s-value { font-size:20px; }
+            .card { padding:10px; margin-bottom:10px; }
+            .card-title { font-size:14px; margin-bottom:10px; }
+            .item-row { padding:10px 0; gap:6px; }
+            .item-row input[type=text], .item-row input[type=number] { min-height:40px; font-size:14px; padding:8px; }
+            .item-row .btn-del, .item-row button { min-width:40px; min-height:40px; font-size:14px; }
+            .form-row { flex-direction:column; gap:8px; }
+            .form-row .form-group { width:100%; }
+            .form-row .form-group input { min-height:40px; font-size:14px; }
+            .form-row .btn { width:100%; min-height:44px; font-size:14px; }
+            .chart-wrap { height:200px; }
+            .section-toggle { padding:12px 0; }
+            .section-toggle .s-label { font-size:14px; }
+            .row > div { min-width:0; }
+        }
+        @media (min-width: 481px) and (max-width: 767px) {
+            .summary-cards { grid-template-columns:repeat(2, 1fr); }
+            .item-row input[type=text], .item-row input[type=number] { min-height:36px; }
+        }
         @media (max-width: 767px) {
-            .header { padding: 12px 14px; }
-            .header h1 { font-size: 16px; }
-            .container { padding: 8px; }
-            .metric { padding: 10px 8px; }
-            .metric-value { font-size: 14px; }
-            .card { padding: 12px; }
-            .summary-cards { grid-template-columns: repeat(2, 1fr); }
-            .row { flex-direction: column; }
-            .tabs { top: 48px; }
-            .tab { padding: 8px; font-size: 13px; }
-            .chart-wrap { height: 220px; }
-            .form-row { flex-direction: column; }
-            .form-row .btn { width: 100%; }
+            .swipe-hint { display:block; }
         }
         @media (min-width: 768px) {
-            .metrics { grid-template-columns: repeat(4, 1fr); }
-            .metric-value { font-size: 20px; }
-            .chart-wrap { height: 320px; }
+            .swipe-hint { display:none; }
+            .metrics { grid-template-columns:repeat(4, 1fr); }
+            .metric-value { font-size:20px; }
+            .chart-wrap { height:320px; }
         }
-        .drag-handle { cursor: grab; color: #bbb; font-size: 14px; padding: 4px 6px; user-select: none; flex-shrink: 0; }
-        .drag-handle:active { cursor: grabbing; }
-        .item-row.dragging { opacity: 0.4; background: #e3f2fd; }
-        .item-row.drag-over { border-top: 2px solid var(--primary); }
     </style>
 </head>
 <body>
@@ -140,38 +173,42 @@
             <div class="tab" data-tab="saving" onclick="switchTab('saving')">💰 Tiết kiệm</div>
         </div>
 
-        <div style="display:flex;gap:12px;margin-bottom:12px;align-items:center">
-            <div style="flex:0 0 auto">
-                <select id="month-select-main" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-weight:600;min-width:140px" onchange="selectMonth(this.value)"></select>
+        <div class="month-row">
+            <div class="month-nav">
+                <select id="month-select-main" onchange="selectMonth(this.value)"></select>
             </div>
-            <div style="flex:0 0 auto">
-                <button class="btn btn-green" onclick="promptAddMonth()" style="font-size:12px">➕ Tháng mới</button>
-            </div>
+            <button class="btn btn-green" onclick="promptAddMonth()" style="font-size:13px">➕ Tháng mới</button>
         </div>
+        <div class="swipe-hint" id="swipe-hint">← Vuốt sang trái/phải để chuyển tháng →</div>
 
         <!-- TAB: THU NHẬP -->
         <div id="tab-income" class="tab-content active">
             <div class="summary-cards" id="income-cards"></div>
-            <div class="row">
-                <div>
-                    <div class="card">
-                        <div class="card-title">💵 Thu nhập cố định</div>
-                        <div id="income-list"></div>
-                        <div class="divider"></div>
-                        <div class="card-title">Thu nhập phát sinh</div>
-                        <div class="form-row" style="margin-bottom:8px">
-                            <div class="form-group"><label>Nguồn</label><input type="text" id="ex-name" placeholder="Thưởng, lãi..."></div>
-                            <div class="form-group"><label>Số tiền</label><input type="number" id="ex-amt" placeholder="0"></div>
-                            <div class="form-group"><label>&nbsp;</label><button class="btn btn-green" onclick="addExtra()">➕ Thêm</button></div>
-                        </div>
-                        <div id="extra-list"></div>
+            <div class="section-toggle open" onclick="toggleSection(this, 'income-body')">
+                <span class="s-label">💵 Thu nhập</span>
+                <span class="s-icon">▼</span>
+            </div>
+            <div class="section-body" id="income-body">
+                <div class="card">
+                    <div class="card-title">Thu nhập cố định</div>
+                    <div id="income-list"></div>
+                    <div class="divider"></div>
+                    <div class="card-title">Thu nhập phát sinh</div>
+                    <div class="form-row" style="margin-bottom:8px">
+                        <div class="form-group"><label>Nguồn</label><input type="text" id="ex-name" placeholder="Thưởng, lãi..."></div>
+                        <div class="form-group"><label>Số tiền</label><input type="number" id="ex-amt" placeholder="0"></div>
+                        <div class="form-group"><label>&nbsp;</label><button class="btn btn-green" onclick="addExtra()">➕ Thêm</button></div>
                     </div>
+                    <div id="extra-list"></div>
                 </div>
-                <div>
-                    <div class="card">
-                        <div class="card-title">Thu nhập theo nguồn</div>
-                        <div class="chart-wrap"><canvas id="chart-income"></canvas></div>
-                    </div>
+            </div>
+            <div class="section-toggle" onclick="toggleSection(this, 'income-chart-body')">
+                <span class="s-label">📊 Biểu đồ thu nhập</span>
+                <span class="s-icon">▼</span>
+            </div>
+            <div class="section-body collapsed" id="income-chart-body">
+                <div class="card">
+                    <div class="chart-wrap"><canvas id="chart-income"></canvas></div>
                 </div>
             </div>
         </div>
@@ -179,30 +216,35 @@
         <!-- TAB: CHI PHÍ -->
         <div id="tab-expense" class="tab-content">
             <div class="summary-cards" id="expense-cards"></div>
-            <div class="row">
-                <div>
-                    <div class="card">
-                        <div class="card-title">💸 Chi phí cá nhân (15%)</div>
-                        <div id="personal-list"></div>
-                        <div class="divider"></div>
-                        <div class="card-title">🏠 Chi phí chung</div>
-                        <div id="expense-list"></div>
-                        <div class="divider"></div>
-                        <div class="form-row">
-                            <div class="form-group"><label>Danh mục mới</label><input type="text" id="new-cat" placeholder="VD: Giải trí..."></div>
-                            <div class="form-group"><label>&nbsp;</label><button class="btn btn-green" onclick="addCategory()">➕ Thêm</button></div>
-                        </div>
+            <div class="section-toggle open" onclick="toggleSection(this, 'expense-body')">
+                <span class="s-label">💸 Chi phí</span>
+                <span class="s-icon">▼</span>
+            </div>
+            <div class="section-body" id="expense-body">
+                <div class="card">
+                    <div class="card-title">Chi phí cá nhân (15%)</div>
+                    <div id="personal-list"></div>
+                    <div class="divider"></div>
+                    <div class="card-title">Chi phí chung</div>
+                    <div id="expense-list"></div>
+                    <div class="divider"></div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Danh mục mới</label><input type="text" id="new-cat" placeholder="VD: Giải trí..."></div>
+                        <div class="form-group"><label>&nbsp;</label><button class="btn btn-green" onclick="addCategory()">➕ Thêm</button></div>
                     </div>
                 </div>
-                <div>
-                    <div class="card">
-                        <div class="card-title">Chi tiêu theo nhóm</div>
-                        <div style="position:relative;min-height:300px;height:auto"><canvas id="chart-expense"></canvas></div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">Phân bổ</div>
-                        <div class="chart-wrap"><canvas id="chart-pie"></canvas></div>
-                    </div>
+            </div>
+            <div class="section-toggle" onclick="toggleSection(this, 'expense-chart-body')">
+                <span class="s-label">📊 Biểu đồ chi tiêu</span>
+                <span class="s-icon">▼</span>
+            </div>
+            <div class="section-body collapsed" id="expense-chart-body">
+                <div class="card">
+                    <div style="position:relative;min-height:250px;height:auto"><canvas id="chart-expense"></canvas></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Phân bổ</div>
+                    <div class="chart-wrap"><canvas id="chart-pie"></canvas></div>
                 </div>
             </div>
         </div>
@@ -210,36 +252,40 @@
         <!-- TAB: TIẾT KIỆM -->
         <div id="tab-saving" class="tab-content">
             <div class="summary-cards" id="saving-cards"></div>
-            <div class="row">
-                <div>
+            <div class="section-toggle" onclick="toggleSection(this, 'saving-chart-body')">
+                <span class="s-label">📈 Biểu đồ xu hướng</span>
+                <span class="s-icon">▼</span>
+            </div>
+            <div class="section-body collapsed" id="saving-chart-body">
+                <div class="row" style="margin-bottom:0">
                     <div class="card">
-                        <div class="card-title">📈 Xu hướng</div>
                         <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
                     </div>
-                </div>
-                <div>
                     <div class="card">
-                        <div class="card-title">📊 Chi tiêu theo nhóm</div>
                         <div class="chart-wrap"><canvas id="chart-stack"></canvas></div>
                     </div>
                 </div>
             </div>
-            <div class="row">
-                <div>
-                    <div class="card">
-                        <div class="card-title">📋 Lịch sử số dư</div>
-                        <div id="history-table"></div>
-                    </div>
+            <div class="section-toggle open" onclick="toggleSection(this, 'saving-table-body')">
+                <span class="s-label">📋 Lịch sử số dư</span>
+                <span class="s-icon">▼</span>
+            </div>
+            <div class="section-body" id="saving-table-body">
+                <div class="card">
+                    <div id="history-table"></div>
                 </div>
-                <div>
-                    <div class="card">
-                        <div class="card-title">Dư theo tháng</div>
-                        <div class="chart-wrap"><canvas id="chart-balance"></canvas></div>
-                    </div>
+            </div>
+            <div class="section-toggle" onclick="toggleSection(this, 'saving-balance-body')">
+                <span class="s-label">💰 Dư theo tháng</span>
+                <span class="s-icon">▼</span>
+            </div>
+            <div class="section-body collapsed" id="saving-balance-body">
+                <div class="card">
+                    <div class="chart-wrap"><canvas id="chart-balance"></canvas></div>
                 </div>
             </div>
             <div class="card">
-                <div class="card-title">📝 Ghi chú tháng này</div>
+                <div class="card-title">📝 Ghi chú</div>
                 <textarea id="notes" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px;min-height:60px" placeholder="Ghi chú chi tiêu tháng này..." oninput="saveNotes()"></textarea>
             </div>
         </div>
@@ -263,6 +309,6 @@
         caches.keys().then(n => n.forEach(k => caches.delete(k)));
     }
     </script>
-    <script src="app.js?v=4"></script>
+    <script src="app.js?v=5"></script>
 </body>
 </html>

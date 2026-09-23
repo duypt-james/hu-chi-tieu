@@ -1081,3 +1081,52 @@ document.addEventListener('DOMContentLoaded', async () => {
         saveData(_data);
     });
 });
+
+// ============================================================
+//  COLLAPSIBLE SECTIONS
+// ============================================================
+function toggleSection(el, bodyId) {
+    const body = document.getElementById(bodyId);
+    if (!body) return;
+    el.classList.toggle('open');
+    if (body.classList.contains('collapsed')) {
+        body.classList.remove('collapsed');
+        body.style.maxHeight = body.scrollHeight + 'px';
+        setTimeout(() => { body.style.maxHeight = ''; }, 300);
+    } else {
+        body.style.maxHeight = body.scrollHeight + 'px';
+        requestAnimationFrame(() => {
+            body.classList.add('collapsed');
+        });
+    }
+}
+
+// ============================================================
+//  SWIPE TO CHANGE MONTH
+// ============================================================
+(function initSwipe() {
+    let startX = 0, startY = 0, distX = 0;
+    const threshold = 80;
+    const tabContent = document.querySelector('.container');
+    if (!tabContent) return;
+    tabContent.addEventListener('touchstart', e => {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+    }, { passive: true });
+    tabContent.addEventListener('touchmove', e => {}, { passive: true });
+    tabContent.addEventListener('touchend', e => {
+        distX = e.changedTouches[0].clientX - startX;
+        const distY = Math.abs(e.changedTouches[0].clientY - startY);
+            if (Math.abs(distX) > threshold && distY < 100) {
+                const hint = document.getElementById('swipe-hint');
+                if (hint) hint.style.display = 'none';
+                const sorted = Object.keys(_data.months).sort().reverse();
+            const idx = sorted.indexOf(_selected);
+            if (distX < 0 && idx > 0) {
+                selectMonth(sorted[idx - 1]);
+            } else if (distX > 0 && idx < sorted.length - 1) {
+                selectMonth(sorted[idx + 1]);
+            }
+        }
+    }, { passive: true });
+})();
