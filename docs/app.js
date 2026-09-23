@@ -667,9 +667,10 @@ function addMonth() {
     setDirty(); renderAll();
 }
 
-function deleteMonth() {
-    if (!confirm(`Xóa ${monthLabel(_selected)}?`)) return;
-    delete _data.months[_selected];
+function deleteMonth(mk) {
+    mk = mk || _selected;
+    if (!confirm(`Xóa ${monthLabel(mk)}?`)) return;
+    delete _data.months[mk];
     const keys = Object.keys(_data.months).sort().reverse();
     _selected = keys[0] || currentMonthKey();
     setDirty(); renderAll();
@@ -1035,7 +1036,10 @@ function renderSidebar() {
         </div>
         ${sorted.length > 1 ? `<div class="sidebar-section">
             <h4>🗑️ Xóa tháng</h4>
-            <button class="btn btn-red" style="width:100%" onclick="deleteMonth()">Xóa ${monthLabel(_selected)}</button>
+            <select id="del-month-select" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:8px">
+                ${sorted.map(mk => `<option value="${mk}">${monthLabel(mk)}</option>`).join('')}
+            </select>
+            <button class="btn btn-red" style="width:100%" onclick="deleteMonth(document.getElementById('del-month-select').value)">Xóa tháng đã chọn</button>
         </div>` : ''}
         <div class="divider"></div>
         <div class="sidebar-section">
