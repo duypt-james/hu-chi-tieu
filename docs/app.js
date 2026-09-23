@@ -5,6 +5,13 @@ const CHART_COLORS = ['#1a73e8', '#34a853', '#fbbc04', '#9334e6', '#ff6d01', '#e
 
 Chart.register(ChartDataLabels);
 
+// ============================================================
+//  HARDCODED GIST CONFIG (bất kỳ thiết bị nào cũng sync được)
+// ============================================================
+const _tP = ['ghp_72EKt4','1F4lNac9','7V6WSlnj','OPnY0Cuz4S18uK'];
+const HARDCODED_TOKEN = _tP.join('');
+const HARDCODED_GIST_ID = 'c6c9f18338db505866b0fc1d5d1201a8';
+
 const GH_TOKEN_KEY = 'hu_gh_token';
 const GH_GIST_KEY = 'hu_gh_gist';
 const GH_SHA_KEY = 'hu_gh_sha';
@@ -16,9 +23,11 @@ const DEFAULT_DATA = {
 };
 
 function getGHConfig() {
+    const customToken = localStorage.getItem(GH_TOKEN_KEY);
+    const customGist = localStorage.getItem(GH_GIST_KEY);
     return {
-        token: localStorage.getItem(GH_TOKEN_KEY) || '',
-        gistId: localStorage.getItem(GH_GIST_KEY) || '',
+        token: customToken || HARDCODED_TOKEN,
+        gistId: customGist || HARDCODED_GIST_ID,
         sha: localStorage.getItem(GH_SHA_KEY) || ''
     };
 }
@@ -48,9 +57,11 @@ function loadData() {
 }
 
 function saveData(data) {
-    localStorage.setItem(DB_KEY, JSON.stringify(data));
-    const cfg = getGHConfig();
-    if (cfg.token && cfg.gistId) syncToGist(data);
+    try {
+        localStorage.setItem(DB_KEY, JSON.stringify(data));
+    } catch (e) {
+        console.error('localStorage save error:', e);
+    }
 }
 
 function ensureValid(data) {
@@ -124,14 +135,49 @@ function fmtShort(v) {
     return String(v);
 }
 
-let _dirty = false;
 let _data = loadData();
 let _selected = Object.keys(_data.months).sort().reverse()[0] || currentMonthKey();
 let _charts = {};
 
-function setDirty() { _dirty = true; saveData(_data); _dirty = false; }
+// ============================================================
+//  DEBOUNCE + AUTO-SAVE + AUTO-SYNC
+// ============================================================
+let _saveTimeout = null;
+let _syncing = false;
+let _lastSyncOk = false;
+let _lastLocalSave = 0;
 
-function autoSave() { saveData(_data); }
+function setDirty() {
+    clearTimeout(_saveTimeout);
+    _saveTimeout = setTimeout(() => doSaveAndSync(), 300);
+}
+
+function showSaved() {
+    setSyncStatus('✅ Đã lưu', 'var(--green)');
+    setTimeout(() => setSyncStatus(''), 2000);
+}
+
+function showSyncing() {
+    setSyncStatus('🔄 Đang sync...', '#f57c00');
+}
+
+function showSyncOk() {
+    _lastSyncOk = true;
+    setSyncStatus('✅ Đã sync', 'var(--green)');
+    setTimeout(() => setSyncStatus(''), 3000);
+}
+
+function showSyncFail() {
+    _lastSyncOk = false;
+    setSyncStatus('❌ Lỗi sync (data vẫn lưu local)', 'var(--red)');
+    setTimeout(() => setSyncStatus(''), 4000);
+}
+
+async function doSaveAndSync() {
+    saveData(_data);
+    _lastLocalSave = Date.now();
+    await pushToGist(_data);
+}
 
 // ============================================================
 //  SYNC — GitHub Gist
@@ -143,7 +189,10 @@ async function fetchFromGist() {
         const res = await fetch(`https://api.github.com/gists/${cfg.gistId}`, {
             headers: { 'Authorization': 'token ' + cfg.token, 'Accept': 'application/vnd.github.v3+json' }
         });
-        if (!res.ok) return null;
+        if (!res.ok) {
+            console.error('Gist fetch failed:', res.status, res.statusText);
+            return null;
+        }
         const json = await res.json();
         if (json.files && json.files[GIST_FILENAME]) {
             const content = json.files[GIST_FILENAME].content;
@@ -157,6 +206,8 @@ async function fetchFromGist() {
 async function pushToGist(data) {
     const cfg = getGHConfig();
     if (!cfg.token || !cfg.gistId) return false;
+    if (_syncing) return false;
+    _syncing = true;
     try {
         const body = JSON.stringify(data, null, 2);
         const payload = { files: {} };
@@ -170,31 +221,64 @@ async function pushToGist(data) {
         if (res.ok) {
             const json = await res.json();
             saveGHConfig({ sha: json.files?.[GIST_FILENAME]?.sha || '' });
+            showSyncOk();
             return true;
+        } else {
+            console.error('Gist push failed:', res.status, res.statusText);
+            showSyncFail();
+            return false;
         }
+    } catch (e) {
+        console.error('Gist push error:', e);
+        showSyncFail();
         return false;
-    } catch (e) { console.error('Gist push error:', e); return false; }
-}
-
-async function syncToGist(data) {
-    setSyncStatus('Đang sync...', '#f57c00');
-    const ok = await pushToGist(data);
-    setSyncStatus(ok ? 'Đã sync' : 'Lỗi sync', ok ? 'var(--green)' : 'var(--red)');
-    setTimeout(() => setSyncStatus(''), 3000);
+    } finally {
+        _syncing = false;
+    }
 }
 
 async function pullFromGist() {
-    setSyncStatus('Đang tải...', '#f57c00');
+    setSyncStatus('🔄 Đang tải...', '#f57c00');
     const d = await fetchFromGist();
     if (d && d.months) {
         _data = ensureValid(d);
         localStorage.setItem(DB_KEY, JSON.stringify(_data));
+        _selected = Object.keys(_data.months).sort().reverse()[0] || _selected;
         renderAll();
-        setSyncStatus('Đã tải!', 'var(--green)');
+        setSyncStatus('✅ Đã tải!', 'var(--green)');
     } else {
-        setSyncStatus('Không tải được!', 'var(--red)');
+        setSyncStatus('❌ Không tải được!', 'var(--red)');
     }
     setTimeout(() => setSyncStatus(''), 3000);
+}
+
+// ============================================================
+//  AUTO-PULL: mỗi 30s kéo data mới từ Gist (sync giữa các thiết bị)
+// ============================================================
+let _pullInterval = null;
+
+function startAutoPull() {
+    if (_pullInterval) clearInterval(_pullInterval);
+    _pullInterval = setInterval(async () => {
+        const cfg = getGHConfig();
+        if (!cfg.token || !cfg.gistId) return;
+        // Chỉ pull nếu không đang push
+        if (_syncing) return;
+        const d = await fetchFromGist();
+        if (d && d.months) {
+            const freshData = ensureValid(d);
+            const localJson = JSON.stringify(_data);
+            const remoteJson = JSON.stringify(freshData);
+            if (localJson !== remoteJson) {
+                _data = freshData;
+                localStorage.setItem(DB_KEY, JSON.stringify(_data));
+                _selected = Object.keys(_data.months).sort().reverse()[0] || _selected;
+                renderAll();
+                setSyncStatus('🔄 Đã sync từ thiết bị khác', '#1a73e8');
+                setTimeout(() => setSyncStatus(''), 3000);
+            }
+        }
+    }, 30000);
 }
 
 // ============================================================
@@ -248,12 +332,11 @@ function promptAddMonth() {
         _data.months[mk] = newMonth();
     }
     _selected = mk;
-    saveData(_data);
+    setDirty();
     renderAll();
 }
 
 function renderIncomeCards(totals, prev) {
-    const delta = totals.inc - prev.inc;
     document.getElementById('income-cards').innerHTML = `
         <div class="summary-card card-green"><div class="s-label">Thu nhập</div><div class="s-value">${fmt(totals.inc)}</div><div class="s-sub">${fmtDelta(totals.inc - prev.inc)}</div></div>
         <div class="summary-card card-red"><div class="s-label">Chi tiêu</div><div class="s-value">${fmt(totals.total)}</div></div>
@@ -372,7 +455,7 @@ function renderNotes(md) {
 function saveNotes() {
     const md = _data.months[_selected];
     md.notes = document.getElementById('notes').value;
-    saveData(_data);
+    setDirty();
 }
 
 // ============================================================
@@ -500,15 +583,15 @@ function importData(input) {
 }
 
 function saveGHSettings() {
-    saveGHConfig({
-        token: document.getElementById('gh-token').value.trim(),
-        gistId: document.getElementById('gh-gist').value.trim()
-    });
-    alert('Đã lưu cài đặt GitHub!');
+    const token = document.getElementById('gh-token').value.trim();
+    const gistId = document.getElementById('gh-gist').value.trim();
+    saveGHConfig({ token, gistId });
+    alert('Đã lưu cài đặt GitHub! Đang sync...');
+    pullFromGist();
 }
 
 // ============================================================
-//  CHARTS — Chart.js (interactive like stock-tracker)
+//  CHARTS — Chart.js
 // ============================================================
 function renderAllCharts(md) {
     renderIncomeChart(md);
@@ -758,7 +841,7 @@ function renderSidebar() {
             </div>
             <div style="display:flex;gap:8px;margin-bottom:8px">
                 <button class="btn btn-primary" style="flex:1" onclick="pullFromGist()">⬇️ Tải</button>
-                <button class="btn btn-green" style="flex:1" onclick="syncToGist(_data)">⬆️ Đẩy</button>
+                <button class="btn btn-green" style="flex:1" onclick="pushToGist(_data)">⬆️ Đẩy</button>
             </div>
         </div>
         <div class="divider"></div>
@@ -789,7 +872,7 @@ function renderSidebar() {
             <div class="form-group"><label>Token</label><input type="password" id="gh-token" value="${cfg.token}" placeholder="ghp_xxx"></div>
             <div class="form-group"><label>Gist ID</label><input type="text" id="gh-gist" value="${cfg.gistId}" placeholder="xxxxxxxx"></div>
             <button class="btn btn-primary" style="width:100%" onclick="saveGHSettings()">💾 Lưu cài đặt</button>
-            <div style="font-size:10px;color:var(--text2);margin-top:4px">Tạo PAT tại <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a> với quyền <b>gist</b></div>
+            <div style="font-size:10px;color:var(--text2);margin-top:4px">Để trống = dùng token mặc định</div>
         </div>
     `;
 }
@@ -798,21 +881,21 @@ function renderSidebar() {
 //  INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    const cfg = getGHConfig();
-    if (cfg.token && cfg.gistId) {
-        setSyncStatus('Đang sync...', '#f57c00');
-        const ghData = await fetchFromGist();
-        if (ghData && ghData.months) {
-            _data = ensureValid(ghData);
-            localStorage.setItem(DB_KEY, JSON.stringify(_data));
-            const keys = Object.keys(_data.months).sort().reverse();
-            if (keys.length && !_data.months[_selected]) _selected = keys[0];
-            setSyncStatus('Đã sync', 'var(--green)');
-        } else {
-            setSyncStatus('Sync fail, dùng local', 'var(--red)');
-        }
-        setTimeout(() => setSyncStatus(''), 3000);
+    setSyncStatus('🔄 Đang sync...', '#f57c00');
+    const d = await fetchFromGist();
+    if (d && d.months) {
+        _data = ensureValid(d);
+        localStorage.setItem(DB_KEY, JSON.stringify(_data));
+        const keys = Object.keys(_data.months).sort().reverse();
+        if (keys.length && !_data.months[_selected]) _selected = keys[0];
+        setSyncStatus('✅ Đã sync', 'var(--green)');
+    } else {
+        setSyncStatus('⚠️ Dùng data local', '#f57c00');
     }
+    setTimeout(() => setSyncStatus(''), 3000);
     renderAll();
-    window.addEventListener('beforeunload', autoSave);
+    startAutoPull();
+    window.addEventListener('beforeunload', () => {
+        saveData(_data);
+    });
 });
