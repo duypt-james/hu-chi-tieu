@@ -47,6 +47,9 @@ st.markdown("""
     .sync-ok { color: #34a853; font-weight: 600; }
     .sync-err { color: #ea4335; font-weight: 600; }
     .sync-warn { color: #f57c00; font-weight: 600; }
+    .stPlot { max-width: 100%; }
+    .stPlot > div { max-width: 100% !important; }
+    img { max-width: 100% !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -623,20 +626,20 @@ with tab_inc:
         extra_data = {k: v for k, v in md.get("extra_income", {}).items() if v > 0}
         all_inc = {**inc_data, **extra_data}
         if all_inc:
-            fig, ax = plt.subplots(figsize=(5, 4), dpi=150)
+            fig, ax = plt.subplots(figsize=(6, 3.5), dpi=250)
             colors = ["#38ef7d", "#43e97b", "#00f2fe", "#667eea", "#764ba2"]
             bars = ax.bar(list(all_inc.keys()), list(all_inc.values()),
                           color=colors[:len(all_inc)], alpha=0.85, edgecolor="white")
             for bar, val in zip(bars, all_inc.values()):
                 ax.text(bar.get_x() + bar.get_width() / 2., bar.get_height(),
-                        fmt_short(val), ha="center", va="bottom", fontsize=9, fontweight="bold")
+                        fmt_short(val), ha="center", va="bottom", fontsize=8, fontweight="bold")
             ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
             ax.grid(axis="y", alpha=0.3)
-            ax.set_title("Thu nhập theo nguồn", fontsize=12, fontweight="bold")
+            ax.set_title("Thu nhập theo nguồn", fontsize=11, fontweight="bold")
             fig.tight_layout()
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             plt.close(fig)
         else:
             st.info("Chưa có dữ liệu thu nhập")
@@ -736,7 +739,7 @@ with tab_exp:
         if chart_data:
             sorted_exp = dict(sorted(chart_data.items(), key=lambda x: x[1], reverse=True))
 
-            fig, ax = plt.subplots(figsize=(5, 4), dpi=150)
+            fig, ax = plt.subplots(figsize=(6, 3.5), dpi=250)
             colors = ["#ff9800", "#ff5722", "#f45c43", "#f093fb", "#667eea", "#4facfe", "#43e97b", "#fa709a", "#00f2fe"]
             bars = ax.barh(list(sorted_exp.keys()), list(sorted_exp.values()),
                            color=colors[:len(sorted_exp)], alpha=0.85, edgecolor="white")
@@ -746,29 +749,29 @@ with tab_exp:
                 pct = val / total_for_pct * 100
                 ax.text(bar.get_width() + max_val * 0.01,
                         bar.get_y() + bar.get_height() / 2.,
-                        f"{fmt_short(val)} ({pct:.0f}%)", ha="left", va="center", fontsize=9, fontweight="bold")
+                        f"{fmt_short(val)} ({pct:.0f}%)", ha="left", va="center", fontsize=8, fontweight="bold")
             ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
             ax.grid(axis="x", alpha=0.3)
-            ax.set_title("Chi tiêu theo nhóm", fontsize=12, fontweight="bold")
+            ax.set_title("Chi tiêu theo nhóm", fontsize=11, fontweight="bold")
             fig.tight_layout()
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
-            fig2, ax2 = plt.subplots(figsize=(4, 4), dpi=150)
+            fig2, ax2 = plt.subplots(figsize=(4.5, 4.5), dpi=250)
             wedges, texts, autotexts = ax2.pie(
                 sorted_exp.values(), labels=None,
                 autopct=lambda p: f"{p:.1f}%" if p > 4 else "",
                 colors=colors[:len(sorted_exp)], startangle=90,
                 pctdistance=0.8, wedgeprops=dict(width=0.5, edgecolor="white"))
             for t in autotexts:
-                t.set_fontsize(9)
+                t.set_fontsize(8)
                 t.set_fontweight("bold")
-            ax2.legend(sorted_exp.keys(), loc="center left", bbox_to_anchor=(1, 0.5), fontsize=9)
-            ax2.set_title("Phân bổ", fontsize=12, fontweight="bold", pad=10)
+            ax2.legend(sorted_exp.keys(), loc="center left", bbox_to_anchor=(1, 0.5), fontsize=8)
+            ax2.set_title("Phân bổ", fontsize=11, fontweight="bold", pad=10)
             fig2.tight_layout()
-            st.pyplot(fig2)
+            st.pyplot(fig2, use_container_width=True)
             plt.close(fig2)
         else:
             st.info("Chưa có dữ liệu chi tiêu")
@@ -823,7 +826,7 @@ with tab_bal:
     st.divider()
     if len(sorted_months) >= 2:
         st.markdown("#### 📈 Xu hướng")
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5), dpi=150)
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4), dpi=250)
 
         x = range(len(labels))
         w = 0.25
@@ -831,28 +834,28 @@ with tab_bal:
         ax1.bar(x, exp_list, width=w, label="Chi tiêu", color="#f45c43", alpha=0.85)
         ax1.bar([i + w for i in x], bal_list, width=w, label="Tiết kiệm", color="#667eea", alpha=0.85)
         ax1.set_xticks(list(x))
-        ax1.set_xticklabels(labels, rotation=45, fontsize=9)
+        ax1.set_xticklabels(labels, rotation=45, fontsize=8)
         ax1.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-        ax1.legend(fontsize=9)
-        ax1.set_title("So sánh thu - chi - tiết kiệm", fontsize=12, fontweight="bold")
+        ax1.legend(fontsize=8)
+        ax1.set_title("So sánh thu - chi - tiết kiệm", fontsize=10, fontweight="bold")
         ax1.spines["top"].set_visible(False)
         ax1.spines["right"].set_visible(False)
         ax1.grid(axis="y", alpha=0.3)
 
-        ax2.plot(labels, bal_list, marker="o", color="#667eea", linewidth=2.5, markersize=6)
+        ax2.plot(labels, bal_list, marker="o", color="#667eea", linewidth=2, markersize=5)
         ax2.fill_between(labels, bal_list, alpha=0.15, color="#667eea")
         for i, v in enumerate(bal_list):
             ax2.annotate(fmt_short(v), (labels[i], v), textcoords="offset points",
-                         xytext=(0, 10), ha="center", fontsize=8, fontweight="bold",
+                         xytext=(0, 8), ha="center", fontsize=7, fontweight="bold",
                          color="#38ef7d" if v >= 0 else "#f45c43")
         ax2.axhline(y=0, color="#999", linewidth=0.8, linestyle="--")
         ax2.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-        ax2.set_title("Xu hướng tiết kiệm", fontsize=12, fontweight="bold")
+        ax2.set_title("Xu hướng tiết kiệm", fontsize=10, fontweight="bold")
         ax2.spines["top"].set_visible(False)
         ax2.spines["right"].set_visible(False)
         ax2.grid(axis="y", alpha=0.3)
         fig.tight_layout()
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=True)
         plt.close(fig)
 
         st.markdown("#### 📊 Chi tiêu theo nhóm")
@@ -873,7 +876,7 @@ with tab_bal:
                 cat_data[lbl].append(pe)
         active_cats = [c for c in all_cats if any(v > 0 for v in cat_data[c])]
         if active_cats:
-            fig, ax = plt.subplots(figsize=(10, 4.5), dpi=150)
+            fig, ax = plt.subplots(figsize=(8, 4), dpi=250)
             x = range(len(labels))
             colors = ["#ff9800", "#ff5722", "#667eea", "#764ba2", "#f093fb", "#f5576c", "#4facfe", "#00f2fe", "#43e97b", "#fa709a"]
             bottom = [0] * len(labels)
@@ -882,27 +885,27 @@ with tab_bal:
                 ax.bar(x, vals, bottom=bottom, label=cat, color=colors[i % len(colors)], alpha=0.85)
                 bottom = [b + v for b, v in zip(bottom, vals)]
             ax.set_xticks(list(x))
-            ax.set_xticklabels(labels, rotation=45, fontsize=9)
+            ax.set_xticklabels(labels, rotation=45, fontsize=8)
             ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-            ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1, 1))
-            ax.set_title("Chi tiêu tích lũy theo nhóm", fontsize=12, fontweight="bold")
+            ax.legend(fontsize=7, loc="upper left", bbox_to_anchor=(1, 1))
+            ax.set_title("Chi tiêu tích lũy theo nhóm", fontsize=10, fontweight="bold")
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
             fig.tight_layout()
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             plt.close(fig)
     else:
         if total_inc > 0:
-            fig, ax = plt.subplots(figsize=(5, 3.5), dpi=150)
+            fig, ax = plt.subplots(figsize=(5, 4), dpi=250)
             sizes = [total_exp, max(balance, 0)] if balance > 0 else [total_exp]
             labels_pie = ["Chi tiêu", "Tiết kiệm"] if balance > 0 else ["Chi tiêu"]
             colors_pie = ["#f45c43", "#38ef7d"] if balance > 0 else ["#f45c43"]
             ax.pie(sizes, labels=labels_pie, colors=colors_pie,
                    autopct=lambda p: fmt_short(p / 100 * total_inc),
-                   startangle=90, textprops={"fontsize": 10, "fontweight": "bold"})
-            ax.set_title("Chi tiêu vs Tiết kiệm", fontsize=12, fontweight="bold")
+                   startangle=90, textprops={"fontsize": 9, "fontweight": "bold"})
+            ax.set_title("Chi tiêu vs Tiết kiệm", fontsize=11, fontweight="bold")
             fig.tight_layout()
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 
     st.divider()
