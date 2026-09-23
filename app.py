@@ -4,6 +4,8 @@ import os
 import base64
 import requests
 from datetime import datetime, date
+import plotly.graph_objects as go
+import plotly.express as px
 
 # ============================================================
 #  ICON — GitHub raw URL for apple-touch-icon
@@ -47,34 +49,27 @@ st.markdown("""
     .sync-ok { color: #34a853; font-weight: 600; }
     .sync-err { color: #ea4335; font-weight: 600; }
     .sync-warn { color: #f57c00; font-weight: 600; }
-    .stPlot { max-width: 100%; }
-    .stPlot > div { max-width: 100% !important; }
-    img { max-width: 100% !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
 #  DATA LAYER — GitHub Gist
 # ============================================================
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-
 GIST_FILENAME = "hu_chitieu_data.json"
 PERSONAL_EXPENSE_RATE = 0.15
 
 CHART_COLORS = ['#1a73e8', '#34a853', '#fbbc04', '#9334e6', '#ff6d01', '#ea4335', '#4facfe', '#00f2fe', '#43e97b', '#fa709a']
 
-def _style_ax(ax, title=""):
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color("#e0e0e0")
-    ax.spines["bottom"].set_color("#e0e0e0")
-    ax.tick_params(colors="#555", labelsize=8)
-    ax.grid(axis="y", color="#f0f0f0", linewidth=0.8)
-    if title:
-        ax.set_title(title, fontsize=10, fontweight="600", color="#333", pad=8)
+CHART_LAYOUT = dict(
+    paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(0,0,0,0)',
+    font=dict(family="-apple-system, 'Segoe UI', Roboto, sans-serif", size=11, color="#444"),
+    margin=dict(l=40, r=16, t=36, b=40),
+    hovermode="x unified",
+    xaxis=dict(showgrid=False, zeroline=False),
+    yaxis=dict(showgrid=True, gridcolor="#f0f0f0", gridwidth=1, zeroline=False),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=10), bgcolor='rgba(0,0,0,0)'),
+)
 
 DEFAULT_DATA = {
     "members": ["Duy", "Hà"],
@@ -505,7 +500,7 @@ with st.sidebar:
                     st.rerun()
 
     st.divider()
-    st.caption("Hũ Chi Tiêu v2.0 — Auto-sync")
+    st.caption("Hũ Chi Tiêu v3.0 — Plotly interactive")
 
 # ============================================================
 #  HEADER
@@ -554,7 +549,7 @@ tab_inc, tab_exp, tab_bal = st.tabs(["💵 Thu nhập", "🛒 Chi phí", "💰 T
 with tab_inc:
     st.subheader("💵 Thu nhập")
 
-    now_inc = sum(md["income"].values()) + sum(md.get("extra_income", {}).values())
+    now_inc = sum(md["income"].values()) + sum(md.get("extra_income", {}).items())
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -638,18 +633,16 @@ with tab_inc:
         extra_data = {k: v for k, v in md.get("extra_income", {}).items() if v > 0}
         all_inc = {**inc_data, **extra_data}
         if all_inc:
-            fig, ax = plt.subplots(figsize=(5, 3), dpi=250)
-            bars = ax.bar(list(all_inc.keys()), list(all_inc.values()),
-                          color=CHART_COLORS[:len(all_inc)], alpha=0.9, edgecolor="white",
-                          linewidth=0.5, zorder=3)
-            for bar, val in zip(bars, all_inc.values()):
-                ax.text(bar.get_x() + bar.get_width() / 2., bar.get_height(),
-                        fmt_short(val), ha="center", va="bottom", fontsize=7, fontweight="600", color="#444")
-            ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-            _style_ax(ax, "Thu nhập theo nguồn")
-            fig.tight_layout()
-            st.pyplot(fig, use_container_width=True)
-            plt.close(fig)
+            fig_inc = go.Figure(go.Bar(
+                x=list(all_inc.keys()),
+                y=list(all_inc.values()),
+                marker_color=CHART_COLORS[:len(all_inc)],
+                text=[fmt_short(v) for v in all_inc.values()],
+                textposition="outside",
+                hovertemplate="%{x}: %{y:,.0f}đ<extra></extra>",
+            ))
+            fig_inc.update_layout(**CHART_LAYOUT, title=dict(text="Thu nhập theo nguồn", font=dict(size=13)), height=300, yaxis_tickformat=",.0f")
+            st.plotly_chart(fig_inc, use_container_width=True)
         else:
             st.info("Chưa có dữ liệu thu nhập")
 
@@ -747,41 +740,31 @@ with tab_exp:
 
         if chart_data:
             sorted_exp = dict(sorted(chart_data.items(), key=lambda x: x[1], reverse=True))
-
-            fig, ax = plt.subplots(figsize=(5, 3), dpi=250)
-            bars = ax.barh(list(sorted_exp.keys()), list(sorted_exp.values()),
-                           color=CHART_COLORS[:len(sorted_exp)], alpha=0.9, edgecolor="white",
-                           linewidth=0.5, height=0.6, zorder=3)
-            max_val = max(sorted_exp.values()) if sorted_exp else 1
             total_for_pct = total_exp if total_exp > 0 else 1
-            for bar, val in zip(bars, sorted_exp.values()):
-                pct = val / total_for_pct * 100
-                ax.text(bar.get_width() + max_val * 0.02,
-                        bar.get_y() + bar.get_height() / 2.,
-                        f"{fmt_short(val)} ({pct:.0f}%)", ha="left", va="center", fontsize=7, fontweight="600", color="#444")
-            ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-            _style_ax(ax, "Chi tiêu theo nhóm")
-            ax.grid(axis="x", color="#f0f0f0", linewidth=0.8)
-            ax.grid(axis="y", visible=False)
-            fig.tight_layout()
-            st.pyplot(fig, use_container_width=True)
-            plt.close(fig)
 
-            fig2, ax2 = plt.subplots(figsize=(4, 4), dpi=250)
-            wedges, texts, autotexts = ax2.pie(
-                sorted_exp.values(), labels=None,
-                autopct=lambda p: f"{p:.1f}%" if p > 4 else "",
-                colors=CHART_COLORS[:len(sorted_exp)], startangle=90,
-                pctdistance=0.78, wedgeprops=dict(width=0.45, edgecolor="white", linewidth=1.5))
-            for t in autotexts:
-                t.set_fontsize(7)
-                t.set_fontweight("600")
-                t.set_color("#333")
-            ax2.legend(sorted_exp.keys(), loc="center left", bbox_to_anchor=(1, 0.5), fontsize=7, frameon=False)
-            ax2.set_title("Phân bổ", fontsize=10, fontweight="600", color="#333", pad=10)
-            fig2.tight_layout()
-            st.pyplot(fig2, use_container_width=True)
-            plt.close(fig2)
+            fig_barh = go.Figure(go.Bar(
+                y=list(sorted_exp.keys()),
+                x=list(sorted_exp.values()),
+                orientation='h',
+                marker_color=CHART_COLORS[:len(sorted_exp)],
+                text=[f"{fmt_short(v)} ({v / total_for_pct * 100:.0f}%)" for v in sorted_exp.values()],
+                textposition="outside",
+                hovertemplate="%{y}: %{x:,.0f}đ<extra></extra>",
+            ))
+            fig_barh.update_layout(**CHART_LAYOUT, title=dict(text="Chi tiêu theo nhóm", font=dict(size=13)), height=300, xaxis_tickformat=",.0f", yaxis=dict(autorange="reversed"))
+            st.plotly_chart(fig_barh, use_container_width=True)
+
+            fig_pie = go.Figure(go.Pie(
+                labels=list(sorted_exp.keys()),
+                values=list(sorted_exp.values()),
+                hole=0.5,
+                marker=dict(colors=CHART_COLORS[:len(sorted_exp)], line=dict(color="white", width=2)),
+                textinfo="percent",
+                textfont=dict(size=10),
+                hovertemplate="%{label}: %{value:,.0f}đ (%{percent})<extra></extra>",
+            ))
+            fig_pie.update_layout(**CHART_LAYOUT, title=dict(text="Phân bổ", font=dict(size=13)), height=300, showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, font=dict(size=9)))
+            st.plotly_chart(fig_pie, use_container_width=True)
         else:
             st.info("Chưa có dữ liệu chi tiêu")
 
@@ -855,65 +838,49 @@ with tab_bal:
 
         with col_left:
             st.markdown("#### 📈 Xu hướng")
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(6, 3), dpi=250)
-            x = range(len(labels))
-            w = 0.22
-            ax1.bar([i - w for i in x], inc_list, width=w, label="Thu nhập", color="#34a853", alpha=0.9, edgecolor="white", linewidth=0.5, zorder=3)
-            ax1.bar(x, exp_list, width=w, label="Chi tiêu", color="#ea4335", alpha=0.9, edgecolor="white", linewidth=0.5, zorder=3)
-            ax1.bar([i + w for i in x], bal_list, width=w, label="Tiết kiệm", color="#1a73e8", alpha=0.9, edgecolor="white", linewidth=0.5, zorder=3)
-            ax1.set_xticks(list(x))
-            ax1.set_xticklabels(labels, rotation=45, fontsize=7)
-            ax1.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-            ax1.legend(fontsize=6, frameon=False)
-            _style_ax(ax1, "So sánh")
+            fig_trend = go.Figure()
+            fig_trend.add_trace(go.Bar(name="Thu nhập", x=labels, y=inc_list, marker_color="#34a853", hovertemplate="%{y:,.0f}đ<extra>Thu nhập</extra>"))
+            fig_trend.add_trace(go.Bar(name="Chi tiêu", x=labels, y=exp_list, marker_color="#ea4335", hovertemplate="%{y:,.0f}đ<extra>Chi tiêu</extra>"))
+            fig_trend.add_trace(go.Bar(name="Tiết kiệm", x=labels, y=bal_list, marker_color="#1a73e8", hovertemplate="%{y:,.0f}đ<extra>Tiết kiệm</extra>"))
+            fig_trend.update_layout(**CHART_LAYOUT, barmode="group", title=dict(text="So sánh", font=dict(size=13)), height=300, yaxis_tickformat=",.0f")
+            st.plotly_chart(fig_trend, use_container_width=True)
 
-            ax2.plot(labels, bal_list, marker="o", color="#1a73e8", linewidth=2, markersize=5, zorder=3)
-            ax2.fill_between(labels, bal_list, alpha=0.1, color="#1a73e8")
-            for i, v in enumerate(bal_list):
-                ax2.annotate(fmt_short(v), (labels[i], v), textcoords="offset points",
-                             xytext=(0, 7), ha="center", fontsize=6, fontweight="600",
-                             color="#34a853" if v >= 0 else "#ea4335")
-            ax2.axhline(y=0, color="#ccc", linewidth=0.8, linestyle="--")
-            ax2.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-            _style_ax(ax2, "Xu hướng TK")
-            fig.tight_layout()
-            st.pyplot(fig, use_container_width=True)
-            plt.close(fig)
+            fig_line = go.Figure()
+            fig_line.add_trace(go.Scatter(name="Tiết kiệm", x=labels, y=bal_list, mode="lines+markers+text",
+                                          line=dict(color="#1a73e8", width=2.5), marker=dict(size=7),
+                                          text=[fmt_short(v) for v in bal_list], textposition="top center",
+                                          textfont=dict(size=9, color="#333"),
+                                          fill="tozeroy", fillcolor="rgba(26,115,232,0.08)",
+                                          hovertemplate="%{x}: %{y:,.0f}đ<extra></extra>"))
+            fig_line.add_hline(y=0, line_dash="dash", line_color="#ccc")
+            fig_line.update_layout(**CHART_LAYOUT, title=dict(text="Xu hướng TK", font=dict(size=13)), height=300, yaxis_tickformat=",.0f")
+            st.plotly_chart(fig_line, use_container_width=True)
 
         with col_right:
             st.markdown("#### 📊 Chi tiêu theo nhóm")
             if active_cats:
-                fig, ax = plt.subplots(figsize=(5, 3), dpi=250)
-                x = range(len(labels))
-                bottom = [0] * len(labels)
+                fig_stack = go.Figure()
                 for i, cat in enumerate(active_cats):
-                    vals = cat_data[cat]
-                    ax.bar(x, vals, bottom=bottom, label=cat, color=CHART_COLORS[i % len(CHART_COLORS)], alpha=0.9, edgecolor="white", linewidth=0.5, zorder=3)
-                    bottom = [b + v for b, v in zip(bottom, vals)]
-                ax.set_xticks(list(x))
-                ax.set_xticklabels(labels, rotation=45, fontsize=7)
-                ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-                ax.legend(fontsize=6, loc="upper left", bbox_to_anchor=(1, 1), frameon=False)
-                _style_ax(ax, "Tích lũy theo nhóm")
-                fig.tight_layout()
-                st.pyplot(fig, use_container_width=True)
-                plt.close(fig)
+                    fig_stack.add_trace(go.Bar(name=cat, x=labels, y=cat_data[cat],
+                                               marker_color=CHART_COLORS[i % len(CHART_COLORS)],
+                                               hovertemplate=f"%{{y:,.0f}}đ<extra>{cat}</extra>"))
+                fig_stack.update_layout(**CHART_LAYOUT, barmode="stack", title=dict(text="Tích lũy theo nhóm", font=dict(size=13)), height=300, yaxis_tickformat=",.0f")
+                st.plotly_chart(fig_stack, use_container_width=True)
             else:
                 st.info("Chưa có dữ liệu")
     else:
         if total_inc > 0:
-            fig, ax = plt.subplots(figsize=(4.5, 3.5), dpi=250)
             sizes = [total_exp, max(balance, 0)] if balance > 0 else [total_exp]
             labels_pie = ["Chi tiêu", "Tiết kiệm"] if balance > 0 else ["Chi tiêu"]
             colors_pie = ["#ea4335", "#34a853"] if balance > 0 else ["#ea4335"]
-            ax.pie(sizes, labels=labels_pie, colors=colors_pie,
-                   autopct=lambda p: fmt_short(p / 100 * total_inc),
-                   startangle=90, textprops={"fontsize": 8, "fontweight": "600"},
-                   wedgeprops=dict(edgecolor="white", linewidth=1.5))
-            ax.set_title("Chi tiêu vs Tiết kiệm", fontsize=10, fontweight="600", color="#333")
-            fig.tight_layout()
-            st.pyplot(fig, use_container_width=True)
-            plt.close(fig)
+            fig_pie_s = go.Figure(go.Pie(
+                labels=labels_pie, values=sizes, hole=0.5,
+                marker=dict(colors=colors_pie, line=dict(color="white", width=2)),
+                textinfo="label+value", textfont=dict(size=10),
+                hovertemplate="%{label}: %{value:,.0f}đ (%{percent})<extra></extra>",
+            ))
+            fig_pie_s.update_layout(**CHART_LAYOUT, title=dict(text="Chi tiêu vs Tiết kiệm", font=dict(size=13)), height=320, showlegend=False)
+            st.plotly_chart(fig_pie_s, use_container_width=True)
 
     st.divider()
     st.markdown("#### 📋 Lịch sử số dư")
@@ -943,19 +910,16 @@ with tab_bal:
         st.dataframe(rows, use_container_width=True, hide_index=True)
     with col_chart:
         if len(sorted_months) >= 1:
-            fig, ax = plt.subplots(figsize=(5, 3.5), dpi=250)
-            colors_bar = ["#34a853" if b >= 0 else "#ea4335" for b in bal_list]
-            bars = ax.bar(labels, bal_list, color=colors_bar, alpha=0.9, edgecolor="white", linewidth=0.5, width=0.55, zorder=3)
-            for bar, val in zip(bars, bal_list):
-                ax.text(bar.get_x() + bar.get_width() / 2., bar.get_height(),
-                        fmt_short(val), ha="center", va="bottom" if val >= 0 else "top",
-                        fontsize=7, fontweight="600", color="#444")
-            ax.axhline(y=0, color="#ccc", linewidth=0.8, linestyle="--")
-            ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, p: fmt_short(v)))
-            _style_ax(ax, "Dư theo tháng")
-            fig.tight_layout()
-            st.pyplot(fig, use_container_width=True)
-            plt.close(fig)
+            fig_bal = go.Figure(go.Bar(
+                x=labels, y=bal_list,
+                marker_color=["#34a853" if b >= 0 else "#ea4335" for b in bal_list],
+                text=[fmt_short(v) for v in bal_list],
+                textposition="outside",
+                hovertemplate="%{x}: %{y:,.0f}đ<extra></extra>",
+            ))
+            fig_bal.add_hline(y=0, line_dash="dash", line_color="#ccc")
+            fig_bal.update_layout(**CHART_LAYOUT, title=dict(text="Dư theo tháng", font=dict(size=13)), height=300, yaxis_tickformat=",.0f")
+            st.plotly_chart(fig_bal, use_container_width=True)
 
 # ============================================================
 #  AUTO-SAVE at end of each rerun
