@@ -71,7 +71,7 @@
         .item-actions button { background: none; border: none; cursor: pointer; font-size: 12px; padding: 4px 8px; border-radius: 4px; }
         .item-actions .btn-del { color: var(--red); }
         .item-actions .btn-del:hover { background: #fce8e6; }
-        .summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+        .summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
         .summary-card { border-radius: 10px; padding: 14px 12px; text-align: center; border: 1px solid rgba(0,0,0,0.06); }
         .summary-card .s-label { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
         .summary-card .s-value { font-size: 18px; font-weight: 700; color: #1a1a2e; }
@@ -138,7 +138,10 @@
             .row > div { min-width:0; }
         }
         @media (min-width: 481px) and (max-width: 767px) {
-            .summary-cards { grid-template-columns:repeat(2, 1fr); }
+            .summary-cards { grid-template-columns:repeat(3, 1fr); gap:6px; }
+            .summary-card { padding:10px 6px; }
+            .summary-card .s-label { font-size:9px; }
+            .summary-card .s-value { font-size:16px; }
             .item-row input[type=text], .item-row input[type=number] { min-height:36px; }
         }
         @media (max-width: 767px) {
@@ -311,6 +314,6 @@
         caches.keys().then(n => n.forEach(k => caches.delete(k)));
     }
     </script>
-    <script src="app.js?v=5"></script>
+    <script src="app.js?v=6"></script>
 </body>
 </html>
