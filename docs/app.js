@@ -193,6 +193,8 @@ async function fetchFromGist() {
             saveGHConfig({ sha: json.files[GIST_FILENAME].sha || json.history?.[0]?.version || '' });
             return JSON.parse(content);
         }
+        // File chưa tồn tại → xóa SHA cũ để push tạo file mới
+        saveGHConfig({ sha: '' });
         return null;
     } catch (e) { console.error('Gist fetch error:', e); return null; }
 }
@@ -206,6 +208,7 @@ async function pushToGist(data) {
         const body = JSON.stringify(data, null, 2);
         const payload = { files: {} };
         payload.files[GIST_FILENAME] = { content: body };
+        // Chỉ gắn SHA nếu file đã tồn tại (PATCH update)
         if (cfg.sha) payload.files[GIST_FILENAME].sha = cfg.sha;
         const res = await fetch(`https://api.github.com/gists/${cfg.gistId}`, {
             method: 'PATCH',
@@ -218,7 +221,25 @@ async function pushToGist(data) {
             showSyncOk();
             return true;
         } else {
-            console.error('Gist push failed:', res.status, res.statusText);
+            const errBody = await res.text();
+            console.error('Gist push failed:', res.status, res.statusText, errBody);
+            // Nếu 422 (SHA mismatch) → clear SHA, retry lần nữa (sẽ tạo mới)
+            if (res.status === 422 && cfg.sha) {
+                saveGHConfig({ sha: '' });
+                const retryPayload = { files: {} };
+                retryPayload.files[GIST_FILENAME] = { content: body };
+                const retryRes = await fetch(`https://api.github.com/gists/${cfg.gistId}`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': 'token ' + cfg.token, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+                    body: JSON.stringify(retryPayload)
+                });
+                if (retryRes.ok) {
+                    const retryJson = await retryRes.json();
+                    saveGHConfig({ sha: retryJson.files?.[GIST_FILENAME]?.sha || '' });
+                    showSyncOk();
+                    return true;
+                }
+            }
             showSyncFail();
             return false;
         }
