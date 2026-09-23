@@ -251,6 +251,14 @@
         <div id="sidebar-content"></div>
     </div>
 
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(r => r.forEach(s => s.unregister()));
+    }
+    if ('caches' in window) {
+        caches.keys().then(n => n.forEach(k => caches.delete(k)));
+    }
+    </script>
     <script src="app.js"></script>
 </body>
 </html>
