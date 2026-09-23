@@ -68,22 +68,24 @@ function ensureValid(data) {
     if (!data || typeof data !== 'object') data = {};
     if (!data.months || typeof data.months !== 'object') data.months = {};
     if (!Array.isArray(data.members)) data.members = [...DEFAULT_DATA.members];
-    if (!Array.isArray(data.categories)) data.categories = [...DEFAULT_DATA.categories];
     for (const mk of Object.keys(data.months)) {
         const m = data.months[mk];
         if (!m.income || typeof m.income !== 'object') m.income = {};
         if (!m.expenses || typeof m.expenses !== 'object') m.expenses = {};
         if (!m.extra_income || typeof m.extra_income !== 'object') m.extra_income = {};
         if (typeof m.notes !== 'string') m.notes = '';
+        if (!Array.isArray(m.categories)) {
+            m.categories = Object.keys(m.expenses).length > 0 ? Object.keys(m.expenses) : [...DEFAULT_DATA.categories];
+        }
     }
     return data;
 }
 
 function newMonth(copyFrom) {
     if (copyFrom) return JSON.parse(JSON.stringify(copyFrom));
-    const m = { income: {}, extra_income: {}, expenses: {}, notes: '' };
+    const m = { income: {}, extra_income: {}, expenses: {}, notes: '', categories: [...DEFAULT_DATA.categories] };
     DEFAULT_DATA.members.forEach(mb => m.income[mb] = 0);
-    DEFAULT_DATA.categories.forEach(c => m.expenses[c] = 0);
+    m.categories.forEach(c => m.expenses[c] = 0);
     return m;
 }
 
@@ -345,8 +347,9 @@ function reorderItems(type, fromIdx, toIdx) {
         const item = _data.members.splice(fromIdx, 1)[0];
         _data.members.splice(toIdx, 0, item);
     } else if (type === 'category') {
-        const item = _data.categories.splice(fromIdx, 1)[0];
-        _data.categories.splice(toIdx, 0, item);
+        const md = _data.months[_selected];
+        const item = md.categories.splice(fromIdx, 1)[0];
+        md.categories.splice(toIdx, 0, item);
     } else if (type === 'extra') {
         const md = _data.months[_selected];
         const keys = Object.keys(md.extra_income);
@@ -473,12 +476,13 @@ function renderPersonalList(md, personal) {
 
 function renderExpenseList(md, personal) {
     const el = document.getElementById('expense-list');
-    el.innerHTML = _data.categories.map((cat, i) => {
+    el.innerHTML = md.categories.map((cat, i) => {
         const val = md.expenses[cat] || 0;
         return `<div class="item-row" draggable="true" data-type="category" data-index="${i}">
             <span class="drag-handle">☰</span>
             <input type="text" value="${cat}" style="border:none;font-weight:600;font-size:13px;flex:1" onchange="renameCategory(${i}, this.value)">
             <input type="text" value="${val === 0 ? '' : fmt(val)}" placeholder="0" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;text-align:right;font-size:13px;width:120px;font-weight:600" oninput="updateExpense('${cat}', this.value)">
+            <button class="btn-del" onclick="deleteCategory(${i})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:12px;padding:4px">✕</button>
         </div>`;
     }).join('');
     initDragDrop(el, 'category');
@@ -593,13 +597,22 @@ function deleteExtra(name) {
 }
 
 function renameCategory(i, newName) {
-    if (!newName || newName === _data.categories[i]) return;
     const md = _data.months[_selected];
-    const oldCat = _data.categories[i];
+    if (!newName || newName === md.categories[i]) return;
+    const oldCat = md.categories[i];
     const val = md.expenses[oldCat] || 0;
     delete md.expenses[oldCat];
     md.expenses[newName] = val;
-    _data.categories[i] = newName;
+    md.categories[i] = newName;
+    setDirty(); renderAll();
+}
+
+function deleteCategory(i) {
+    const md = _data.months[_selected];
+    const cat = md.categories[i];
+    if (!confirm(`Xóa "${cat}"?`)) return;
+    delete md.expenses[cat];
+    md.categories.splice(i, 1);
     setDirty(); renderAll();
 }
 
@@ -618,9 +631,10 @@ function updateExpense(cat, rawVal) {
 
 function addCategory() {
     const name = document.getElementById('new-cat').value.trim();
-    if (!name || _data.categories.includes(name)) return;
-    _data.categories.push(name);
-    _data.months[_selected].expenses[name] = 0;
+    const md = _data.months[_selected];
+    if (!name || md.categories.includes(name)) return;
+    md.categories.push(name);
+    md.expenses[name] = 0;
     document.getElementById('new-cat').value = '';
     setDirty(); renderAll();
 }
@@ -889,12 +903,15 @@ function renderTrendChart() {
 function renderStackChart() {
     const sorted = Object.keys(_data.months).sort();
     const labels = sorted.map(monthShort);
-    const allCats = [..._data.categories];
-    _data.members.forEach(mb => { const lbl = `CP ${mb}`; if (!allCats.includes(lbl)) allCats.push(lbl); });
+    const catSet = new Set();
+    sorted.forEach(mk => (_data.months[mk].categories || []).forEach(c => catSet.add(c)));
+    const allCats = [...catSet];
+    _data.members.forEach(mb => { const lbl = `CP ${mb}`; allCats.push(lbl); });
     const catData = {};
     allCats.forEach(c => catData[c] = sorted.map(mk => {
         const m = _data.months[mk];
-        if (_data.categories.includes(c)) return m.expenses[c] || 0;
+        const mCats = m.categories || [];
+        if (mCats.includes(c)) return m.expenses[c] || 0;
         const mb = c.replace('CP ', '');
         return Math.round((m.income[mb] || 0) * PERSONAL_RATE);
     }));
