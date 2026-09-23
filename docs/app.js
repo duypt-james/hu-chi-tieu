@@ -337,19 +337,19 @@ function renderSavingCards(totals, prev) {
 function renderHistoryTable() {
     const el = document.getElementById('history-table');
     const sorted = Object.keys(_data.months).sort();
-    let cum = 0;
+    const totalBal = sorted.reduce((sum, mk) => sum + calcMonthTotal(_data.months[mk]).bal, 0);
     const rows = sorted.map((mk, i) => {
         const t = calcMonthTotal(_data.months[mk]);
-        cum += t.bal;
         const prevB = i > 0 ? calcMonthTotal(_data.months[sorted[i - 1]]).bal : 0;
         const chg = i > 0 ? t.bal - prevB : 0;
+        const isLast = i === sorted.length - 1;
         return `<tr>
             <td style="padding:6px 8px;font-weight:600">${monthShort(mk)}</td>
             <td style="padding:6px 8px;text-align:right">${fmt(t.inc)}</td>
             <td style="padding:6px 8px;text-align:right">${fmt(t.total)}</td>
             <td style="padding:6px 8px;text-align:right;font-weight:700;color:${t.bal >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(t.bal)}</td>
             <td style="padding:6px 8px;text-align:right;color:${i > 0 ? (chg >= 0 ? 'var(--green)' : 'var(--red)') : '#999'}">${i > 0 ? fmtDelta(chg) : '--'}</td>
-            <td style="padding:6px 8px;text-align:right;font-weight:600">${fmt(cum)}</td>
+            <td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--primary)">${isLast ? fmt(totalBal) : '--'}</td>
         </tr>`;
     }).reverse();
     el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
