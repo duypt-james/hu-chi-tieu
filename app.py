@@ -1,20 +1,24 @@
 import streamlit as st
 import json
 import os
+import base64
 import requests
 from datetime import datetime, date
 
-ICON_URL = "https://raw.githubusercontent.com/duypt-james/hu-chi-tieu/master/icon.png"
+# ============================================================
+#  ICON — GitHub raw URL for apple-touch-icon
+# ============================================================
+ICON_URL = "https://raw.githubusercontent.com/duypt-james/hu-chi-tieu/main/icon.png"
+ICON_EMOJI = "💰"
 
 st.set_page_config(page_title="Hũ Chi Tiêu", page_icon=ICON_URL, layout="wide")
 
 st.markdown(f"""
+<link rel="apple-touch-icon" href="{ICON_URL}">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Hũ Chi Tiêu">
 <meta name="theme-color" content="#667eea">
-<link rel="apple-touch-icon" href="{ICON_URL}">
-<link rel="icon" type="image/png" href="{ICON_URL}">
 """, unsafe_allow_html=True)
 
 st.markdown("""
@@ -40,6 +44,9 @@ st.markdown("""
     .summary-card .label { font-size: 11px; color: #666; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
     .summary-card .value { font-size: 20px; font-weight: 700; color: #1a1a2e; }
     .summary-card .sub { font-size: 11px; color: #888; margin-top: 2px; }
+    .sync-ok { color: #34a853; font-weight: 600; }
+    .sync-err { color: #ea4335; font-weight: 600; }
+    .sync-warn { color: #f57c00; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -113,7 +120,6 @@ def new_month(copy_from=None):
 
 
 def calc_personal_expenses(md):
-    """Tính chi phí cá nhân = 15% thu nhập mỗi người"""
     result = {}
     for member, income in md.get("income", {}).items():
         result[member] = int(income * PERSONAL_EXPENSE_RATE)
@@ -151,24 +157,57 @@ def _ensure_valid(data):
     return data
 
 
+# ============================================================
+#  SYNC STATUS
+# ============================================================
+if "_sync_status" not in st.session_state:
+    st.session_state._sync_status = ""
+if "_sync_color" not in st.session_state:
+    st.session_state._sync_color = ""
+if "_last_sync_time" not in st.session_state:
+    st.session_state._last_sync_time = ""
+
+
+def set_sync_status(text, color=""):
+    st.session_state._sync_status = text
+    st.session_state._sync_color = color
+
+
 def load_data():
     token, gist_id = get_gist_config()
 
     if token and gist_id:
         try:
+            set_sync_status("Đang tải...", "#f57c00")
             headers = {"Authorization": f"token {token}"}
-            resp = requests.get(f"https://api.github.com/gists/{gist_id}", headers=headers, timeout=10)
+            resp = requests.get(f"https://api.github.com/gists/{gist_id}",
+                                headers=headers, timeout=15)
             if resp.status_code == 200:
                 gist = resp.json()
                 if GIST_FILENAME in gist.get("files", {}):
                     content = gist["files"][GIST_FILENAME]["content"]
                     d = json.loads(content)
                     if d:
-                        return _ensure_valid(d)
+                        set_sync_status("Đã sync", "#34a853")
+                        return _ensure_valid(d), "gist_ok"
+                    else:
+                        set_sync_status("Gist trống, dùng local", "#f57c00")
+                else:
+                    set_sync_status(f"File '{GIST_FILENAME}' không có trong Gist", "#f57c00")
+            elif resp.status_code == 401:
+                set_sync_status("Token sai hoặc hết hạn!", "#ea4335")
+            elif resp.status_code == 404:
+                set_sync_status("Gist không tồn tại!", "#ea4335")
             else:
-                st.warning(f"Gist API lỗi {resp.status_code}")
+                set_sync_status(f"Gist API lỗi {resp.status_code}", "#ea4335")
+        except requests.exceptions.ConnectionError:
+            set_sync_status("Không kết nối được GitHub!", "#ea4335")
+        except requests.exceptions.Timeout:
+            set_sync_status("GitHub API timeout!", "#ea4335")
         except Exception as e:
-            st.warning(f"Không đọc được Gist: {e}")
+            set_sync_status(f"Lỗi: {e}", "#ea4335")
+    else:
+        set_sync_status("Chưa cấu hình Gist", "#f57c00")
 
     path = "family_data.json"
     if os.path.exists(path):
@@ -176,52 +215,156 @@ def load_data():
             with open(path, "r", encoding="utf-8") as f:
                 d = json.load(f)
             if d:
-                return _ensure_valid(d)
+                set_sync_status("Đang dùng file local", "#f57c00")
+                return _ensure_valid(d), "local"
         except Exception:
             pass
 
     data = dict(DEFAULT_DATA)
     data["months"] = {datetime.today().strftime("%Y-%m"): new_month()}
-    return data
+    set_sync_status("Tạo data mới", "#f57c00")
+    return data, "new"
 
 
-def save(data):
+def save(data, show_status=True):
     token, gist_id = get_gist_config()
     content = json.dumps(data, ensure_ascii=False, indent=2)
 
     if token and gist_id:
+        if show_status:
+            set_sync_status("Đang lưu...", "#f57c00")
         try:
             headers = {"Authorization": f"token {token}", "Content-Type": "application/json"}
             payload = {"files": {GIST_FILENAME: {"content": content}}}
             resp = requests.patch(f"https://api.github.com/gists/{gist_id}",
-                                  headers=headers, json=payload, timeout=10)
+                                  headers=headers, json=payload, timeout=15)
             if resp.status_code == 200:
+                now = datetime.now().strftime("%H:%M:%S")
+                st.session_state._last_sync_time = now
+                if show_status:
+                    set_sync_status(f"Đã sync lúc {now}", "#34a853")
                 return True
-        except Exception:
-            pass
+            elif resp.status_code == 401:
+                if show_status:
+                    set_sync_status("Token sai!", "#ea4335")
+            elif resp.status_code == 422:
+                if show_status:
+                    set_sync_status("SHA conflict, thử lại...", "#f57c00")
+            else:
+                if show_status:
+                    set_sync_status(f"Lưu Gist lỗi {resp.status_code}", "#ea4335")
+        except requests.exceptions.ConnectionError:
+            if show_status:
+                set_sync_status("Mất kết nối!", "#ea4335")
+        except requests.exceptions.Timeout:
+            if show_status:
+                set_sync_status("Timeout!", "#ea4335")
+        except Exception as e:
+            if show_status:
+                set_sync_status(f"Lỗi: {e}", "#ea4335")
 
     try:
         with open("family_data.json", "w", encoding="utf-8") as f:
             f.write(content)
+        if show_status:
+            set_sync_status("Đã lưu local", "#f57c00")
         return True
-    except Exception:
+    except Exception as e:
+        if show_status:
+            set_sync_status(f"Lỗi lưu local: {e}", "#ea4335")
         return False
 
 
+def pull_from_gist():
+    token, gist_id = get_gist_config()
+    if not token or not gist_id:
+        set_sync_status("Chưa cấu hình Gist!", "#ea4335")
+        return None
+
+    try:
+        set_sync_status("Đang tải từ Gist...", "#f57c00")
+        headers = {"Authorization": f"token {token}"}
+        resp = requests.get(f"https://api.github.com/gists/{gist_id}",
+                            headers=headers, timeout=15)
+        if resp.status_code == 200:
+            gist = resp.json()
+            if GIST_FILENAME in gist.get("files", {}):
+                content = gist["files"][GIST_FILENAME]["content"]
+                d = json.loads(content)
+                if d and "months" in d:
+                    now = datetime.now().strftime("%H:%M:%S")
+                    st.session_state._last_sync_time = now
+                    set_sync_status(f"Đã tải lúc {now}", "#34a853")
+                    return _ensure_valid(d)
+                else:
+                    set_sync_status("Gist trống hoặc sai format", "#f57c00")
+                    return None
+            else:
+                set_sync_status(f"File '{GIST_FILENAME}' không có trong Gist", "#f57c00")
+                return None
+        elif resp.status_code == 401:
+            set_sync_status("Token sai hoặc hết hạn!", "#ea4335")
+        elif resp.status_code == 404:
+            set_sync_status("Gist không tồn tại!", "#ea4335")
+        else:
+            set_sync_status(f"Lỗi {resp.status_code}", "#ea4335")
+    except requests.exceptions.ConnectionError:
+        set_sync_status("Không kết nối GitHub!", "#ea4335")
+    except requests.exceptions.Timeout:
+        set_sync_status("Timeout!", "#ea4335")
+    except Exception as e:
+        set_sync_status(f"Lỗi: {e}", "#ea4335")
+    return None
+
+
+def push_to_gist(data):
+    token, gist_id = get_gist_config()
+    if not token or not gist_id:
+        set_sync_status("Chưa cấu hình Gist!", "#ea4335")
+        return False
+
+    content = json.dumps(data, ensure_ascii=False, indent=2)
+    try:
+        set_sync_status("Đang đẩy lên Gist...", "#f57c00")
+        headers = {"Authorization": f"token {token}", "Content-Type": "application/json"}
+        payload = {"files": {GIST_FILENAME: {"content": content}}}
+        resp = requests.patch(f"https://api.github.com/gists/{gist_id}",
+                              headers=headers, json=payload, timeout=15)
+        if resp.status_code == 200:
+            now = datetime.now().strftime("%H:%M:%S")
+            st.session_state._last_sync_time = now
+            set_sync_status(f"Đã đẩy lúc {now}", "#34a853")
+            return True
+        elif resp.status_code == 401:
+            set_sync_status("Token sai!", "#ea4335")
+        elif resp.status_code == 422:
+            set_sync_status("SHA conflict!", "#ea4335")
+        else:
+            set_sync_status(f"Lỗi {resp.status_code}", "#ea4335")
+    except requests.exceptions.ConnectionError:
+        set_sync_status("Không kết nối GitHub!", "#ea4335")
+    except requests.exceptions.Timeout:
+        set_sync_status("Timeout!", "#ea4335")
+    except Exception as e:
+        set_sync_status(f"Lỗi: {e}", "#ea4335")
+    return False
+
+
 # ============================================================
-#  AUTO-SAVE — tự động lưu khi thay đổi dữ liệu
+#  AUTO-SAVE
 # ============================================================
 if "data" not in st.session_state:
-    st.session_state.data = load_data()
+    loaded, _sync_source = load_data()
+    st.session_state.data = loaded
+
 if "_dirty" not in st.session_state:
     st.session_state._dirty = False
+
+data = st.session_state.data
 
 
 def _set_dirty():
     st.session_state._dirty = True
-
-
-data = st.session_state.data
 
 
 def parse_money(text):
@@ -246,11 +389,43 @@ def fmt_input(v):
 with st.sidebar:
     st.markdown("### ⚙️ Quản lý")
 
+    sync_text = st.session_state.get("_sync_status", "")
+    sync_color = st.session_state.get("_sync_color", "")
+    last_sync = st.session_state.get("_last_sync_time", "")
+
+    if sync_text:
+        st.markdown(f'<div style="padding:6px 10px;border-radius:6px;background:{"#e8f5e9" if sync_color == "#34a853" else "#fce4ec" if sync_color == "#ea4335" else "#fff3e0"};margin-bottom:8px"><span style="color:{sync_color};font-size:13px;font-weight:600">☁️ {sync_text}</span></div>', unsafe_allow_html=True)
+
+    if last_sync:
+        st.caption(f"🕐 Lần sync cuối: {last_sync}")
+
+    token, gist_id = get_gist_config()
+    if token and gist_id:
+        st.caption("✅ GitHub Gist đã cấu hình")
+    else:
+        st.warning("⚠️ Chưa cấu hình Gist")
+
+    st.divider()
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("⬇️ Tải từ Cloud", use_container_width=True):
+            new_data = pull_from_gist()
+            if new_data:
+                st.session_state.data = new_data
+                data = new_data
+                st.rerun()
+    with c2:
+        if st.button("⬆️ Đẩy lên Cloud", use_container_width=True):
+            push_to_gist(data)
+
+    st.divider()
+
     st.download_button("📥 Export JSON",
                        json.dumps(data, ensure_ascii=False, indent=2),
                        file_name="family_data.json", mime="application/json")
 
-    uploaded = st.file_uploader("Import JSON", type=["json"])
+    uploaded = st.file_uploader("📤 Import JSON", type=["json"])
     if uploaded:
         try:
             imported = json.load(uploaded)
@@ -315,12 +490,7 @@ with st.sidebar:
                     st.rerun()
 
     st.divider()
-    token, gist_id = get_gist_config()
-    if token and gist_id:
-        st.caption("☁️ Đang dùng GitHub Gist")
-    else:
-        st.caption("💾 Đang dùng file local")
-    st.caption("Hũ Chi Tiêu v1.1")
+    st.caption("Hũ Chi Tiêu v2.0 — Auto-sync")
 
 # ============================================================
 #  HEADER
