@@ -15,6 +15,7 @@ const GH_SHA_KEY = 'hu_gh_sha';
 const DEFAULT_DATA = {
     members: ['Duy', 'Hà'],
     categories: ['Sinh hoạt', 'DV chung cư + nước sinh hoạt', 'Điện sinh hoạt', 'Giáo dục', 'Y tế', 'Bỉm sữa + bánh kẹo', 'Khác'],
+    savings: [{ name: 'Vàng SJC', qty: 0, price: 0, amount: 0 }, { name: 'Đô la Mỹ', qty: 0, price: 0, amount: 0 }, { name: 'Chứng khoán', qty: 0, price: 0, amount: 0 }],
     months: {}
 };
 
@@ -68,6 +69,18 @@ function ensureValid(data) {
     if (!data || typeof data !== 'object') data = {};
     if (!data.months || typeof data.months !== 'object') data.months = {};
     if (!Array.isArray(data.members)) data.members = [...DEFAULT_DATA.members];
+    // Migrate per-month savings to global
+    if (!Array.isArray(data.savings)) {
+        let found = false;
+        for (const mk of Object.keys(data.months)) {
+            if (Array.isArray(data.months[mk].savings) && data.months[mk].savings.length > 0) {
+                data.savings = data.months[mk].savings;
+                found = true;
+                break;
+            }
+        }
+        if (!found) data.savings = [...DEFAULT_DATA.savings];
+    }
     for (const mk of Object.keys(data.months)) {
         const m = data.months[mk];
         if (!m.income || typeof m.income !== 'object') m.income = {};
@@ -77,16 +90,14 @@ function ensureValid(data) {
         if (!Array.isArray(m.categories)) {
             m.categories = Object.keys(m.expenses).length > 0 ? Object.keys(m.expenses) : [...DEFAULT_DATA.categories];
         }
-        if (!Array.isArray(m.savings)) {
-            m.savings = [{ name: 'Vàng SJC', qty: 0, price: 0, amount: 0 }, { name: 'Đô la Mỹ', qty: 0, price: 0, amount: 0 }, { name: 'Chứng khoán', qty: 0, price: 0, amount: 0 }];
-        }
+        delete m.savings;
     }
     return data;
 }
 
 function newMonth(copyFrom) {
     if (copyFrom) return JSON.parse(JSON.stringify(copyFrom));
-    const m = { income: {}, extra_income: {}, expenses: {}, notes: '', categories: [...DEFAULT_DATA.categories], savings: [{ name: 'Vàng SJC', qty: 0, price: 0, amount: 0 }, { name: 'Đô la Mỹ', qty: 0, price: 0, amount: 0 }, { name: 'Chứng khoán', qty: 0, price: 0, amount: 0 }] };
+    const m = { income: {}, extra_income: {}, expenses: {}, notes: '', categories: [...DEFAULT_DATA.categories] };
     DEFAULT_DATA.members.forEach(mb => m.income[mb] = 0);
     m.categories.forEach(c => m.expenses[c] = 0);
     return m;
@@ -522,14 +533,13 @@ function renderSavingCards(totals, prev) {
 // ============================================================
 function renderSavingsTable() {
     const el = document.getElementById('savings-table');
-    const md = _data.months[_selected] || newMonth();
-    if (!md.savings) md.savings = [];
+    const savings = _data.savings || [];
     const sorted = Object.keys(_data.months).sort();
     const totalBal = sorted.reduce((sum, mk) => sum + calcMonthTotal(_data.months[mk]).bal, 0);
-    const savingsSum = md.savings.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+    const savingsSum = savings.reduce((s, it) => s + (Number(it.amount) || 0), 0);
     const grandTotal = totalBal + savingsSum;
 
-    const rows = md.savings.map((it, i) => {
+    const rows = savings.map((it, i) => {
         const qtyVal = it.qty ? String(it.qty) : '';
         const priceVal = it.price ? fmt(it.price) : '';
         const amountVal = it.amount ? fmt(it.amount) : '';
@@ -565,16 +575,13 @@ function renderSavingsTable() {
 }
 
 function addSaving() {
-    const md = _data.months[_selected];
-    if (!md.savings) md.savings = [];
-    md.savings.push({ name: 'Nguồn mới', qty: 0, price: 0, amount: 0 });
+    _data.savings.push({ name: 'Nguồn mới', qty: 0, price: 0, amount: 0 });
     setDirty();
     renderSavingsTable();
 }
 
 function updateSaving(i, field, val) {
-    const md = _data.months[_selected];
-    const it = md.savings[i];
+    const it = _data.savings[i];
     if (!it) return;
     if (field === 'name') {
         it.name = val;
@@ -590,8 +597,7 @@ function updateSaving(i, field, val) {
 }
 
 function deleteSaving(i) {
-    const md = _data.months[_selected];
-    md.savings.splice(i, 1);
+    _data.savings.splice(i, 1);
     setDirty();
     renderSavingsTable();
 }
