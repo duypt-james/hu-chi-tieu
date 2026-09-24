@@ -875,10 +875,10 @@ function renderIncomeChart(md) {
     const inc = { ...md.income };
     Object.entries(md.extra_income || {}).forEach(([k, v]) => { if (v > 0) inc[k] = v; });
     const entries = Object.entries(inc).filter(([, v]) => v > 0);
+    destroyChart('chart-income');
     if (!entries.length) return;
     const labels = entries.map(e => e[0]);
     const values = entries.map(e => e[1]);
-    destroyChart('chart-income');
     _charts['chart-income'] = new Chart(document.getElementById('chart-income'), {
         type: 'bar',
         data: {
@@ -895,9 +895,9 @@ function renderExpenseChart(md) {
     _data.members.forEach(mb => { if (personal[mb] > 0) chartData[`CP ${mb}`] = personal[mb]; });
     Object.entries(md.expenses || {}).forEach(([k, v]) => { if (v > 0) chartData[k] = v; });
     const entries = Object.entries(chartData).sort((a, b) => b[1] - a[1]);
+    destroyChart('chart-expense');
     if (!entries.length) return;
     const total = entries.reduce((a, e) => a + e[1], 0);
-    destroyChart('chart-expense');
     _charts['chart-expense'] = new Chart(document.getElementById('chart-expense'), {
         type: 'bar',
         data: {
