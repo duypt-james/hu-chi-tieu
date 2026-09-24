@@ -860,7 +860,6 @@ async function testGHConnection() {
 function renderAllCharts(md) {
     renderIncomeChart(md);
     renderExpenseChart(md);
-    renderPieChart(md);
     renderTrendChart();
     renderBalanceChart();
 }
