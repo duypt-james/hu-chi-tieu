@@ -590,7 +590,8 @@ function updateSaving(i, field, val) {
         it[field] = numVal;
         if (field === 'qty' || field === 'price') {
             it.amount = (Number(it.qty) || 0) * (Number(it.price) || 0);
-            renderSavingsTable();
+            const amountInput = document.querySelectorAll('#savings-table input[type="text"]')[i * 4 + 3];
+            if (amountInput) amountInput.value = it.amount ? fmt(it.amount) : '';
         }
     }
     setDirty();
