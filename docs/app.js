@@ -545,7 +545,7 @@ function renderSavingsTable() {
         const amountVal = it.amount ? fmt(it.amount) : '';
         return `<tr>
             <td style="padding:4px"><input type="text" value="${it.name}" oninput="updateSaving(${i},'name',this.value)" style="border:none;font-weight:600;font-size:12px;width:100%;background:transparent"></td>
-            <td style="padding:4px"><input type="text" value="${qtyVal}" placeholder="0" oninput="updateSaving(${i},'qty',this.value)" onfocus="unformatOnFocus(this)" onblur="formatOnBlur(this)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
+            <td style="padding:4px"><input type="text" value="${qtyVal}" placeholder="0" oninput="updateSaving(${i},'qty',this.value)" onfocus="unformatOnFocus(this)" onblur="formatOnBlur(this)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;max-width:50px;text-align:right"></td>
             <td style="padding:4px"><input type="text" value="${priceVal}" placeholder="0" oninput="updateSaving(${i},'price',this.value)" onfocus="unformatOnFocus(this)" onblur="formatOnBlur(this)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
             <td style="padding:4px"><input type="text" value="${amountVal}" placeholder="0" oninput="updateSaving(${i},'amount',this.value)" onfocus="unformatOnFocus(this)" onblur="formatOnBlur(this)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right;font-weight:700"></td>
             <td style="padding:4px;text-align:center"><button onclick="deleteSaving(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button></td>
@@ -555,7 +555,7 @@ function renderSavingsTable() {
     el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="background:#f5f5f5;font-size:10px;font-weight:600;color:var(--text2)">
             <th style="padding:4px;text-align:left">Nguồn</th>
-            <th style="padding:4px;text-align:right">Số lượng</th>
+            <th style="padding:4px;text-align:right;width:60px">SL</th>
             <th style="padding:4px;text-align:right">Đơn giá</th>
             <th style="padding:4px;text-align:right">Số tiền</th>
             <th style="padding:4px;width:30px"></th>
