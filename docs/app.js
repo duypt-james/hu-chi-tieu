@@ -151,8 +151,10 @@ let _saveTimeout = null;
 let _syncing = false;
 let _lastSyncOk = false;
 let _lastLocalSave = 0;
+let _localDirty = false;
 
 function setDirty() {
+    _localDirty = true;
     clearTimeout(_saveTimeout);
     _saveTimeout = setTimeout(() => doSaveAndSync(), 300);
 }
@@ -182,7 +184,8 @@ function showSyncFail(msg) {
 async function doSaveAndSync() {
     saveData(_data);
     _lastLocalSave = Date.now();
-    await pushToGist(_data);
+    const ok = await pushToGist(_data);
+    if (ok) _localDirty = false;
 }
 
 // ============================================================
@@ -296,8 +299,9 @@ function startAutoPull() {
     _pullInterval = setInterval(async () => {
         const cfg = getGHConfig();
         if (!cfg.token || !cfg.gistId) return;
-        // Chỉ pull nếu không đang push
         if (_syncing) return;
+        if (_localDirty) return;
+        if (Date.now() - _lastLocalSave < 5000) return;
         const d = await fetchFromGist();
         if (d && d.months) {
             const freshData = ensureValid(d);
@@ -527,10 +531,10 @@ function renderSavingsTable() {
 
     const rows = md.savings.map((it, i) => {
         return `<tr>
-            <td style="padding:4px"><input type="text" value="${it.name}" onchange="updateSaving(${i},'name',this.value)" style="border:none;font-weight:600;font-size:12px;width:100%;background:transparent"></td>
-            <td style="padding:4px"><input type="number" value="${it.qty || ''}" placeholder="0" onchange="updateSaving(${i},'qty',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
-            <td style="padding:4px"><input type="number" value="${it.price || ''}" placeholder="0" onchange="updateSaving(${i},'price',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
-            <td style="padding:4px"><input type="number" value="${it.amount || ''}" placeholder="0" onchange="updateSaving(${i},'amount',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right;font-weight:700"></td>
+            <td style="padding:4px"><input type="text" value="${it.name}" oninput="updateSaving(${i},'name',this.value)" style="border:none;font-weight:600;font-size:12px;width:100%;background:transparent"></td>
+            <td style="padding:4px"><input type="number" value="${it.qty || ''}" placeholder="0" oninput="updateSaving(${i},'qty',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
+            <td style="padding:4px"><input type="number" value="${it.price || ''}" placeholder="0" oninput="updateSaving(${i},'price',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
+            <td style="padding:4px"><input type="number" value="${it.amount || ''}" placeholder="0" oninput="updateSaving(${i},'amount',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right;font-weight:700"></td>
             <td style="padding:4px;text-align:center"><button onclick="deleteSaving(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button></td>
         </tr>`;
     }).join('');
