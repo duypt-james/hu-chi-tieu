@@ -531,6 +531,8 @@ function renderSavingCards(totals, prev) {
 // ============================================================
 //  SAVINGS TABLE (Other savings sources)
 // ============================================================
+let _composing = false;
+
 function renderSavingsTable() {
     const el = document.getElementById('savings-table');
     const savings = _data.savings || [];
@@ -544,7 +546,7 @@ function renderSavingsTable() {
         const priceVal = it.price ? fmt(it.price) : '';
         const amountVal = it.amount ? fmt(it.amount) : '';
         return `<tr>
-            <td style="padding:4px"><input type="text" value="${it.name}" oninput="updateSaving(${i},'name',this.value)" style="border:none;font-weight:600;font-size:12px;width:100%;background:transparent"></td>
+            <td style="padding:4px"><input type="text" value="${it.name}" oninput="if(!_composing)updateSaving(${i},'name',this.value)" oncompositionstart="_composing=true" oncompositionend="_composing=false;updateSaving(${i},'name',this.value)" style="border:none;font-weight:600;font-size:12px;width:100%;background:transparent"></td>
             <td style="padding:4px"><input type="text" value="${qtyVal}" placeholder="0" oninput="updateSaving(${i},'qty',this.value)" onfocus="unformatOnFocus(this)" onblur="formatOnBlur(this)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;max-width:50px;text-align:right"></td>
             <td style="padding:4px"><input type="text" value="${priceVal}" placeholder="0" oninput="updateSaving(${i},'price',this.value)" onfocus="unformatOnFocus(this)" onblur="formatOnBlur(this)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
             <td style="padding:4px"><input type="text" value="${amountVal}" placeholder="0" oninput="updateSaving(${i},'amount',this.value)" onfocus="unformatOnFocus(this)" onblur="formatOnBlur(this)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right;font-weight:700"></td>
