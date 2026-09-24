@@ -989,6 +989,8 @@ function renderTrendChart() {
     const expList = sorted.map(mk => calcMonthTotal(_data.months[mk]).total);
     const balList = sorted.map(mk => calcMonthTotal(_data.months[mk]).bal);
     destroyChart('chart-trend');
+    const opts = chartOpts('So sánh', v => fmtShort(v));
+    opts.plugins.legend.display = true;
     _charts['chart-trend'] = new Chart(document.getElementById('chart-trend'), {
         type: 'bar',
         data: {
@@ -999,7 +1001,7 @@ function renderTrendChart() {
                 { label: 'Tiết kiệm', data: balList, backgroundColor: '#1a73e8', borderRadius: 3, borderSkipped: false }
             ]
         },
-        options: chartOpts('So sánh', v => fmtShort(v))
+        options: opts
     });
 }
 
@@ -1063,7 +1065,7 @@ function chartOpts(title, tickFmt, isBar = true) {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-            legend: { display: true, position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 10 } } },
+            legend: { display: false, position: 'top', align: 'end', labels: { boxWidth: 10, font: { size: 10 } } },
             tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + fmt(ctx.raw) } },
             title: { display: false },
             datalabels: isBar ? {
