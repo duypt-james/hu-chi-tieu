@@ -447,7 +447,7 @@ function renderIncomeList(md, personal) {
                 <input type="text" value="${mb}" style="border:none;font-weight:600;font-size:13px;width:80px" onchange="renameMember(${i}, this.value)">
                 <div class="item-sub">💸 Chi phí cá nhân: ${fmt(pe)}</div>
             </div>
-            <input type="text" value="${inc === 0 ? '' : fmt(inc)}" placeholder="0" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;text-align:right;font-size:13px;width:120px;font-weight:600" oninput="updateIncome('${mb}', this.value)">
+            <input type="text" value="${inc === 0 ? '' : fmt(inc)}" placeholder="0" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;text-align:right;font-size:13px;width:120px;font-weight:600" oninput="updateIncome('${mb}', this.value)" onfocus="unformatOnFocus(this)" onblur="formatOnBlur(this)">
         </div>`;
     }).join('');
     initDragDrop(el, 'member');
@@ -487,7 +487,7 @@ function renderExpenseList(md, personal) {
         return `<div class="item-row" draggable="true" data-type="category" data-index="${i}">
             <span class="drag-handle">☰</span>
             <input type="text" value="${cat}" style="border:none;font-weight:600;font-size:13px;flex:1" onchange="renameCategory(${i}, this.value)">
-            <input type="text" value="${val === 0 ? '' : fmt(val)}" placeholder="0" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;text-align:right;font-size:13px;width:120px;font-weight:600" oninput="updateExpense('${cat}', this.value)">
+            <input type="text" value="${val === 0 ? '' : fmt(val)}" placeholder="0" style="border:1px solid var(--border);border-radius:4px;padding:4px 8px;text-align:right;font-size:13px;width:120px;font-weight:600" oninput="updateExpense('${cat}', this.value)" onfocus="unformatOnFocus(this)" onblur="formatOnBlur(this)">
             <button class="btn-del" onclick="deleteCategory(${i})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:12px;padding:4px">✕</button>
         </div>`;
     }).join('');
@@ -530,11 +530,14 @@ function renderSavingsTable() {
     const grandTotal = totalBal + savingsSum;
 
     const rows = md.savings.map((it, i) => {
+        const qtyVal = it.qty ? String(it.qty) : '';
+        const priceVal = it.price ? fmt(it.price) : '';
+        const amountVal = it.amount ? fmt(it.amount) : '';
         return `<tr>
             <td style="padding:4px"><input type="text" value="${it.name}" oninput="updateSaving(${i},'name',this.value)" style="border:none;font-weight:600;font-size:12px;width:100%;background:transparent"></td>
-            <td style="padding:4px"><input type="number" value="${it.qty || ''}" placeholder="0" oninput="updateSaving(${i},'qty',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
-            <td style="padding:4px"><input type="number" value="${it.price || ''}" placeholder="0" oninput="updateSaving(${i},'price',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
-            <td style="padding:4px"><input type="number" value="${it.amount || ''}" placeholder="0" oninput="updateSaving(${i},'amount',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right;font-weight:700"></td>
+            <td style="padding:4px"><input type="text" value="${qtyVal}" placeholder="0" oninput="updateSaving(${i},'qty',this.value)" onfocus="unformatOnFocus(this)" onblur="formatOnBlur(this)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
+            <td style="padding:4px"><input type="text" value="${priceVal}" placeholder="0" oninput="updateSaving(${i},'price',this.value)" onfocus="unformatOnFocus(this)" onblur="formatOnBlur(this)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
+            <td style="padding:4px"><input type="text" value="${amountVal}" placeholder="0" oninput="updateSaving(${i},'amount',this.value)" onfocus="unformatOnFocus(this)" onblur="formatOnBlur(this)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right;font-weight:700"></td>
             <td style="padding:4px;text-align:center"><button onclick="deleteSaving(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button></td>
         </tr>`;
     }).join('');
@@ -576,7 +579,7 @@ function updateSaving(i, field, val) {
     if (field === 'name') {
         it.name = val;
     } else {
-        const numVal = Number(val) || 0;
+        const numVal = parseMoney(val);
         it[field] = numVal;
         if (field === 'qty' || field === 'price') {
             it.amount = (Number(it.qty) || 0) * (Number(it.price) || 0);
@@ -722,8 +725,18 @@ function addCategory() {
 }
 
 function parseMoney(s) {
-    const clean = s.replace(/\./g, '').replace(/,/g, '').trim();
+    const clean = s.replace(/\./g, '').replace(/,/g, '').replace(/đ/g, '').trim();
     return parseInt(clean) || 0;
+}
+
+function formatOnBlur(el) {
+    const v = parseMoney(el.value);
+    el.value = v === 0 ? '' : fmt(v);
+}
+
+function unformatOnFocus(el) {
+    const v = parseMoney(el.value);
+    el.value = v === 0 ? '' : String(v);
 }
 
 function selectMonth(mk) {
