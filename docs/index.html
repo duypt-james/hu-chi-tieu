@@ -230,12 +230,22 @@
                 <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
             </div>
             <div class="card">
+                <div class="card-title">Dư theo tháng</div>
+                <div class="chart-wrap"><canvas id="chart-balance"></canvas></div>
+            </div>
+            <div class="card">
                 <div class="card-title">📋 Lịch sử số dư</div>
                 <div id="history-table"></div>
             </div>
             <div class="card">
-                <div class="card-title">Dư theo tháng</div>
-                <div class="chart-wrap"><canvas id="chart-balance"></canvas></div>
+                <div class="card-title">🏦 Các nguồn tiết kiệm khác</div>
+                <div id="savings-table"></div>
+                <div style="margin-top:8px">
+                    <button class="btn btn-green" onclick="addSaving()" style="font-size:12px">➕ Thêm nguồn</button>
+                </div>
+            </div>
+            <div class="card" style="background:linear-gradient(135deg,#e8f0fe,#d2e3fc)">
+                <div id="savings-total"></div>
             </div>
             <div class="card">
                 <div class="card-title">📝 Ghi chú tháng này</div>

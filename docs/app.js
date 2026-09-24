@@ -77,13 +77,16 @@ function ensureValid(data) {
         if (!Array.isArray(m.categories)) {
             m.categories = Object.keys(m.expenses).length > 0 ? Object.keys(m.expenses) : [...DEFAULT_DATA.categories];
         }
+        if (!Array.isArray(m.savings)) {
+            m.savings = [{ name: 'Vàng SJC', qty: 0, price: 0, amount: 0 }, { name: 'Đô la Mỹ', qty: 0, price: 0, amount: 0 }, { name: 'Chứng khoán', qty: 0, price: 0, amount: 0 }];
+        }
     }
     return data;
 }
 
 function newMonth(copyFrom) {
     if (copyFrom) return JSON.parse(JSON.stringify(copyFrom));
-    const m = { income: {}, extra_income: {}, expenses: {}, notes: '', categories: [...DEFAULT_DATA.categories] };
+    const m = { income: {}, extra_income: {}, expenses: {}, notes: '', categories: [...DEFAULT_DATA.categories], savings: [{ name: 'Vàng SJC', qty: 0, price: 0, amount: 0 }, { name: 'Đô la Mỹ', qty: 0, price: 0, amount: 0 }, { name: 'Chứng khoán', qty: 0, price: 0, amount: 0 }] };
     DEFAULT_DATA.members.forEach(mb => m.income[mb] = 0);
     m.categories.forEach(c => m.expenses[c] = 0);
     return m;
@@ -383,6 +386,7 @@ function renderAll() {
     renderPersonalList(md, personal);
     renderSavingCards(totals, prevTotals);
     renderHistoryTable();
+    renderSavingsTable();
     renderNotes(md);
     renderSidebar();
     renderAllCharts(md);
@@ -507,6 +511,82 @@ function renderSavingCards(totals, prev) {
         <div class="summary-card card-red"><div class="s-label">Chi tiêu</div><div class="s-value">${fmt(totals.total)}</div><div class="s-sub">${fmtDelta(totals.total - prev.total)}</div></div>
         <div class="summary-card card-purple"><div class="s-label">Tiết kiệm (${rate}%)</div><div class="s-value">${fmt(totals.bal)}</div><div class="s-sub">${fmtDelta(totals.bal - prev.bal)}</div></div>
     `;
+}
+
+// ============================================================
+//  SAVINGS TABLE (Other savings sources)
+// ============================================================
+function renderSavingsTable() {
+    const el = document.getElementById('savings-table');
+    const md = _data.months[_selected] || newMonth();
+    if (!md.savings) md.savings = [];
+    const sorted = Object.keys(_data.months).sort();
+    const totalBal = sorted.reduce((sum, mk) => sum + calcMonthTotal(_data.months[mk]).bal, 0);
+    const savingsSum = md.savings.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+    const grandTotal = totalBal + savingsSum;
+
+    const rows = md.savings.map((it, i) => {
+        return `<tr>
+            <td style="padding:4px"><input type="text" value="${it.name}" onchange="updateSaving(${i},'name',this.value)" style="border:none;font-weight:600;font-size:12px;width:100%;background:transparent"></td>
+            <td style="padding:4px"><input type="number" value="${it.qty || ''}" placeholder="0" onchange="updateSaving(${i},'qty',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
+            <td style="padding:4px"><input type="number" value="${it.price || ''}" placeholder="0" onchange="updateSaving(${i},'price',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right"></td>
+            <td style="padding:4px"><input type="number" value="${it.amount || ''}" placeholder="0" onchange="updateSaving(${i},'amount',this.value)" style="border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;width:100%;text-align:right;font-weight:700"></td>
+            <td style="padding:4px;text-align:center"><button onclick="deleteSaving(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px">✕</button></td>
+        </tr>`;
+    }).join('');
+
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#f5f5f5;font-size:10px;font-weight:600;color:var(--text2)">
+            <th style="padding:4px;text-align:left">Nguồn</th>
+            <th style="padding:4px;text-align:right">Số lượng</th>
+            <th style="padding:4px;text-align:right">Đơn giá</th>
+            <th style="padding:4px;text-align:right">Số tiền</th>
+            <th style="padding:4px;width:30px"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+    </table>`;
+
+    document.getElementById('savings-total').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:13px;font-weight:600">Tổng số tiền tiết kiệm</span>
+            <span style="font-size:18px;font-weight:700;color:var(--primary)">${fmtShort(grandTotal)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:4px">
+            Tiết kiệm khác: ${fmtShort(savingsSum)} + Lũy kế: ${fmtShort(totalBal)}
+        </div>
+    `;
+}
+
+function addSaving() {
+    const md = _data.months[_selected];
+    if (!md.savings) md.savings = [];
+    md.savings.push({ name: 'Nguồn mới', qty: 0, price: 0, amount: 0 });
+    setDirty();
+    renderSavingsTable();
+}
+
+function updateSaving(i, field, val) {
+    const md = _data.months[_selected];
+    const it = md.savings[i];
+    if (!it) return;
+    const numVal = Number(val) || 0;
+    if (field === 'name') {
+        it.name = val;
+    } else {
+        it[field] = numVal;
+        if (field === 'qty' || field === 'price') {
+            it.amount = (Number(it.qty) || 0) * (Number(it.price) || 0);
+        }
+    }
+    setDirty();
+    renderSavingsTable();
+}
+
+function deleteSaving(i) {
+    const md = _data.months[_selected];
+    md.savings.splice(i, 1);
+    setDirty();
+    renderSavingsTable();
 }
 
 function renderHistoryTable() {
