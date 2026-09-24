@@ -520,21 +520,21 @@ function renderHistoryTable() {
         const isLast = i === sorted.length - 1;
         return `<tr>
             <td style="padding:6px 8px;font-weight:600">${monthShort(mk)}</td>
-            <td style="padding:6px 8px;text-align:right">${fmt(t.inc)}</td>
-            <td style="padding:6px 8px;text-align:right">${fmt(t.total)}</td>
-            <td style="padding:6px 8px;text-align:right;font-weight:700;color:${t.bal >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(t.bal)}</td>
+            <td style="padding:6px 8px;text-align:right">${fmtShort(t.inc)}</td>
+            <td style="padding:6px 8px;text-align:right">${fmtShort(t.total)}</td>
+            <td style="padding:6px 8px;text-align:right;font-weight:700;color:${t.bal >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtShort(t.bal)}</td>
             <td style="padding:6px 8px;text-align:right;color:${i > 0 ? (chg >= 0 ? 'var(--green)' : 'var(--red)') : '#999'}">${i > 0 ? fmtDelta(chg) : '--'}</td>
-            <td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--primary)">${isLast ? fmt(totalBal) : '--'}</td>
+            <td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--primary)">${isLast ? fmtShort(totalBal) : '--'}</td>
         </tr>`;
     }).reverse();
-    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="background:#f5f5f5;font-size:11px;font-weight:600;color:var(--text2)">
-            <th style="padding:6px 8px;text-align:left">Tháng</th>
-            <th style="padding:6px 8px;text-align:right">Thu nhập</th>
-            <th style="padding:6px 8px;text-align:right">Chi tiêu</th>
-            <th style="padding:6px 8px;text-align:right">Dư</th>
-            <th style="padding:6px 8px;text-align:right">Thay đổi</th>
-            <th style="padding:6px 8px;text-align:right">Lũy kế</th>
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:#f5f5f5;font-size:10px;font-weight:600;color:var(--text2)">
+            <th style="padding:4px 4px;text-align:left">Tháng</th>
+            <th style="padding:4px 4px;text-align:right">Thu nhập</th>
+            <th style="padding:4px 4px;text-align:right">Chi tiêu</th>
+            <th style="padding:4px 4px;text-align:right">Dư</th>
+            <th style="padding:4px 4px;text-align:right">Thay đổi</th>
+            <th style="padding:4px 4px;text-align:right">Lũy kế</th>
         </tr></thead>
         <tbody>${rows.join('')}</tbody>
     </table>`;
@@ -765,7 +765,6 @@ function renderAllCharts(md) {
     renderExpenseChart(md);
     renderPieChart(md);
     renderTrendChart();
-    renderStackChart();
     renderBalanceChart();
 }
 
