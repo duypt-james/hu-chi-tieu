@@ -573,17 +573,17 @@ function updateSaving(i, field, val) {
     const md = _data.months[_selected];
     const it = md.savings[i];
     if (!it) return;
-    const numVal = Number(val) || 0;
     if (field === 'name') {
         it.name = val;
     } else {
+        const numVal = Number(val) || 0;
         it[field] = numVal;
         if (field === 'qty' || field === 'price') {
             it.amount = (Number(it.qty) || 0) * (Number(it.price) || 0);
+            renderSavingsTable();
         }
     }
     setDirty();
-    renderSavingsTable();
 }
 
 function deleteSaving(i) {
