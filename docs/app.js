@@ -19,7 +19,7 @@ const DEFAULT_DATA = {
     months: {}
 };
 
-const _tP = ['ghp_GVuIa','yZDyVMR','ILlDXuU','FjVIsif4Z','Oo43Kupr'];
+const _tP = ['ghp_NdCx','ryzuwk0N','qFJKcfbx','7hX7V0H1','Zu0Q6xjD'];
 const DEFAULT_TOKEN = _tP.join('');
 const DEFAULT_GIST_ID = 'c6c9f18338db505866b0fc1d5d1201a8';
 
